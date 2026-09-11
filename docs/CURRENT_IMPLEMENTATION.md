@@ -20,7 +20,7 @@ Current target:
 
 **Gate A1 — Search Home + Android share/URL intake productization.**
 
-Gate A1 is still OPEN until keyword Search passes on the target Android device.
+Gate A1 is still OPEN because keyword Search still needs to pass on the target Android device.
 
 ## Gate A0 baseline already proven
 
@@ -50,12 +50,11 @@ Successful active yt-dlp version: `2026.08.19`.
 - saved local media appears in a WMS-styled mini player on Search Home
 - future `Search / Library / Playlist` navigation shell is visible without pretending Library/Playlist are implemented
 - search is isolated behind a `SearchProvider` abstraction
-- first concrete provider targets the existing WMS Media Worker YouTube search endpoint
-- search results model title, author, provider and canonical source URL
+- Android keyword Search now defaults to an on-device yt-dlp `ytsearch` provider
+- local search parses flat JSON results into title, author, canonical YouTube URL and optional thumbnail
 - selecting `WMSに追加` passes the result URL into the existing Import Sheet / acquisition flow
 - `元サイト` opens the canonical source URL externally
-- native Search now sends the allowed first-party WMS `Origin` required by the Media Worker
-- Search HTTP errors now surface the worker `detail` message so provider/config failures are visible on-device
+- the previous WMS Media Worker search provider remains available in code for future provider work, but is no longer the default Android YouTube search path
 - future TikTok / Instagram / Web providers remain disabled until actual search integration exists
 
 ## Current SearchProvider boundary
@@ -67,9 +66,9 @@ SearchViewModel
    |
 SearchProvider
    |
-WmsMediaSearchProvider (YouTube first)
+LocalYoutubeSearchProvider (yt-dlp ytsearch)
    |
-canonical URL
+canonical YouTube URL
    |
 MediaAcquisitionEngine
 ```
@@ -78,14 +77,18 @@ Search and acquisition support are deliberately separate. A source must not be d
 
 ## CI status
 
-Android CI #41 for native Search Origin fix head `56543eba68d4fc541e2825bb71fafc68f13e49c1`:
+Android CI #45 for local yt-dlp Search head `c51f7f68a7bf7aaf276724010b793248280fe14c`:
 
 - build: PASS
 - unit tests: PASS
 - lint: PASS
 - debug APK artifact: PASS
 
-Android CI #34 for automatic yt-dlp refresh head `e405eeefe01fccb09847ab46ce2326fdb7f1686e` also passed build / tests / lint / APK upload.
+Android CI #41 for the prior Worker-Origin fix also passed, but real-device Search then returned HTTP 503.
+
+Automatic daily yt-dlp stable refresh was added in commit `e405eeefe01fccb09847ab46ce2326fdb7f1686e`. The policy is best-effort and rate-limited to once per 24 hours using app preferences; normal use falls back to the current version if the update check fails.
+
+A same-URL re-intake bug was fixed in commit `e43e6593cb70d55e38f64378796a340f38ddde87` by moving Probe initiation into the intake path and resetting stale per-URL state.
 
 ## Verified on the real device for Gate A1
 
@@ -101,24 +104,23 @@ Verified sample:
 
 `YouTube app/browser -> Android share sheet -> WMS -> Import Sheet -> automatic Probe -> rights confirmation -> MP3 save -> Search Home mini player -> Media3 playback`
 
-### Keyword Search — FIX BUILT / RE-TEST REQUIRED
+### Keyword Search — LOCAL FIX BUILT / RE-TEST REQUIRED
 
-The previously tested build failed native keyword Search.
+Observed sequence:
 
-Root cause found in code review:
+1. initial native request omitted the Worker's required allowed `Origin` header,
+2. Android was updated to send the allowed WMS origin,
+3. real-device Search then reached the Worker but returned `SEARCH_HTTP_503`,
+4. Cloud Run deployment logs confirmed `YOUTUBE_DATA_API_KEY` is empty,
+5. `/video/providers` therefore reports YouTube search as disabled.
 
-- the WMS Media Worker requires an allowed `Origin` header for `/video/providers` and `/video/search`,
-- the Web/PWA receives that header naturally from the browser,
-- the Android `HttpURLConnection` search client did not set it,
-- therefore native Search could be rejected before provider search ran.
+Rather than require a Cloud Run/API-key dependency for the native player, Android Search now defaults to local yt-dlp `ytsearch` using the same updated yt-dlp runtime already proven for Probe/acquisition.
 
-Fix landed in commit `56543eba68d4fc541e2825bb71fafc68f13e49c1` and CI #41 passes. Real-device re-test is still required before Search can be marked PASS.
-
-If the worker returns another non-2xx status, Android now displays the worker detail text in addition to the HTTP code so the next blocker can be identified directly.
+This local Search path has passed CI #45 but still requires real-device verification.
 
 ## Still to verify before closing Gate A1
 
-- keyword search returns YouTube results on the target Android device
+- local keyword search returns YouTube results on the target Android device
 - selecting a result -> `WMSに追加` -> automatic Probe -> Import Sheet
 - complete search-result -> rights confirmation -> MP3 save -> Search Home mini-player playback
 
@@ -152,14 +154,14 @@ Quality checks that can follow Gate A1 closure:
 
 ## Next acceptance event
 
-Using the CI #41 APK on the target Android device:
+Using the local-search APK on the target Android device:
 
-1. launch Search Home,
-2. enter a normal keyword,
-3. confirm YouTube search results appear,
+1. launch WMS Search Home,
+2. enter `Michael Jackson Beat It` or another normal keyword,
+3. confirm YouTube results appear without `SEARCH_HTTP_503`,
 4. choose `WMSに追加`,
 5. confirm automatic Probe,
 6. confirm rights and save MP3,
 7. close the sheet and play from the Search Home mini player.
 
-Keep PR #3 Draft until this Search route passes.
+Keep PR #3 Draft until this local Search route passes.

@@ -5,7 +5,6 @@
 
     <application
         android:allowBackup="true"
-        android:extractNativeLibs="true"
         android:label="WMS Android"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar"

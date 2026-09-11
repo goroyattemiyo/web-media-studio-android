@@ -19,6 +19,11 @@ class AcquisitionEngineException(
     cause: Throwable? = null,
 ) : Exception(message, cause)
 
+data class EngineDiagnostics(
+    val executionSucceeded: Boolean,
+    val lines: List<String>,
+)
+
 class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
     private val appContext = context.applicationContext
     private val initMutex = Mutex()
@@ -37,8 +42,6 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
             }
 
             try {
-                // Gate A0 intentionally does not call updateYoutubeDL().
-                // The packaged Python/yt-dlp compatibility must be proven first.
                 YoutubeDL.getInstance().init(appContext)
                 FFmpeg.getInstance().init(appContext)
                 initialized = true
@@ -73,6 +76,42 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
                 title = info.title?.trim().orEmpty().ifBlank { "タイトル不明" },
                 provider = providerFor(sourceUrl),
             )
+        }
+    }
+
+    suspend fun diagnose(sourceUrl: String): Result<EngineDiagnostics> = withContext(Dispatchers.IO) {
+        runCatching {
+            validateUrl(sourceUrl)
+            ensureReady()
+
+            val request = YoutubeDLRequest(sourceUrl.trim()).apply {
+                addOption("--verbose")
+                addOption("--simulate")
+                addOption("--no-playlist")
+            }
+
+            try {
+                val response = YoutubeDL.getInstance().execute(request)
+                val raw = "${response.err}\n${response.out}"
+                EngineDiagnostics(
+                    executionSucceeded = true,
+                    lines = diagnosticLines(raw),
+                )
+            } catch (error: Throwable) {
+                val raw = buildString {
+                    append(error.message.orEmpty())
+                    append('\n')
+                    append(error.cause?.message.orEmpty())
+                }
+                val lines = diagnosticLines(raw)
+                if (lines.isEmpty()) {
+                    throw classifyError(error, "DIAGNOSTIC_FAILED")
+                }
+                EngineDiagnostics(
+                    executionSucceeded = false,
+                    lines = lines,
+                )
+            }
         }
     }
 
@@ -236,6 +275,46 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
         }
     }
 
+    private fun diagnosticLines(raw: String): List<String> {
+        val keys = listOf(
+            "yt-dlp version",
+            "python ",
+            "js runtimes:",
+            "po token providers:",
+            "po token cache providers:",
+            "js challenge providers:",
+            "player client",
+            "player_client",
+            "po token",
+            "http error 403",
+            "forbidden",
+            "no supported javascript runtime",
+        )
+
+        return raw
+            .lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .filter { line ->
+                val lower = line.lowercase()
+                keys.any { key -> key in lower }
+            }
+            .map(::sanitizeDiagnosticLine)
+            .distinct()
+            .take(MAX_DIAGNOSTIC_LINES)
+            .toList()
+            .ifEmpty { listOf("対象となる診断行は取得できませんでした") }
+    }
+
+    private fun sanitizeDiagnosticLine(raw: String): String {
+        return raw
+            .replace(Regex("https?://\\S+", RegexOption.IGNORE_CASE), "[URL]")
+            .replace(Regex("/data/\\S+", RegexOption.IGNORE_CASE), "[APP_PATH]")
+            .replace(Regex("/storage/\\S+", RegexOption.IGNORE_CASE), "[STORAGE_PATH]")
+            .replace(Regex("\\s+"), " ")
+            .take(320)
+    }
+
     private fun classifyError(error: Throwable, fallbackCode: String): AcquisitionEngineException {
         if (error is AcquisitionEngineException) return error
 
@@ -354,17 +433,12 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
             ?: raw.lineSequence().map { it.trim() }.firstOrNull { it.isNotBlank() }.orEmpty()
 
         if (compact.isBlank()) return "詳細なし"
-
-        return compact
-            .replace(Regex("https?://\\S+", RegexOption.IGNORE_CASE), "[URL]")
-            .replace(Regex("/data/\\S+", RegexOption.IGNORE_CASE), "[APP_PATH]")
-            .replace(Regex("/storage/\\S+", RegexOption.IGNORE_CASE), "[STORAGE_PATH]")
-            .replace(Regex("\\s+"), " ")
-            .take(220)
+        return sanitizeDiagnosticLine(compact).take(220)
     }
 
     private companion object {
         const val PROCESS_ID = "wms-gate-a0"
         const val MAX_DURATION_SECONDS = 1800
+        const val MAX_DIAGNOSTIC_LINES = 12
     }
 }

@@ -2,6 +2,10 @@
 
 Last updated: 2026-09-11 JST
 
+UI/UX source of truth:
+
+`docs/UI_UX_DESIGN.md`
+
 ## Gate A0 — Local acquisition feasibility
 
 Goal: prove the riskiest assumption before building the full app.
@@ -39,15 +43,26 @@ Provider test order after basic runtime proof:
 
 One provider success was enough to exit A0; broad provider support remains later work.
 
-## Gate A1 — Android share intake
+## Gate A1 — Search Home + Android intake shell
 
+Goal: replace the Gate A0 developer-first screen with the first native WMS product shell while hardening Android share intake.
+
+- [ ] app launches on **Search Home** by default
+- [ ] approved WMS neon-diamond emblem is used as Android visual identity
+- [ ] primary field accepts both search text and pasted HTTP(S) URL
+- [ ] provider-neutral `SearchProvider` boundary exists; UI is not hard-coded around YouTube
+- [ ] keyword-search provider implementation can be added incrementally without changing screen structure
 - [ ] `ACTION_SEND text/plain` from browser/app
 - [ ] first HTTP(S) URL extraction
 - [ ] reject credential-bearing/malformed URLs
-- [ ] Import sheet opens with source prefilled
-- [ ] manual paste remains available
+- [ ] shared valid URL bypasses Search Home and opens Import Sheet prefilled
+- [ ] pasted URL opens the same Import Sheet path
+- [ ] Import Sheet performs automatic Probe; normal UI has no Probe button
+- [ ] rights/permission confirmation remains explicit before save
+- [ ] existing Gate A0 MP3 acquisition path remains usable through Import Sheet
+- [ ] Gate A0 yt-dlp controls move to `Developer Tools`
 
-Exit: share from another Android app reaches WMS reliably.
+Exit: normal app launch looks like WMS Media Search, while a shared/pasted URL reliably reaches an automatically probed Import Sheet and can still complete the proven local-save path.
 
 ## Gate A2 — Managed acquisition jobs
 
@@ -69,6 +84,7 @@ Exit: an acquisition survives leaving the Activity and remains controllable.
 - [ ] All media list
 - [ ] delete from WMS
 - [ ] reopen app and retain library
+- [ ] persistent Mini Player shell above bottom navigation when media is loaded
 
 Exit: acquired media survives app restart and remains playable.
 
@@ -82,7 +98,7 @@ Exit: acquired media survives app restart and remains playable.
 
 Exit: named playlists and order survive restart.
 
-## Gate A5 — Native background playback
+## Gate A5 — Native background playback + Now Playing
 
 - [ ] `MediaLibraryService`
 - [ ] `MediaSession`
@@ -92,32 +108,43 @@ Exit: named playlists and order survive restart.
 - [ ] screen-off playback
 - [ ] screen-off Next
 - [ ] queue/position restore
+- [ ] full native Now Playing screen
+- [ ] WMS visualizer renderer boundary
+- [ ] lightweight visual modes (`emblem`, `pulse`, `orbit`, `bars`, `wave`, `minimal`)
+- [ ] audio-analysis data-source boundary for audio-reactive visualizers
 
-Exit: target Android device continues local playlist playback with screen locked and system Play/Pause/Next works.
+Exit: target Android device continues local playlist playback with screen locked and system Play/Pause/Next works, with the WMS player identity in place.
 
-## Gate A6 — Production-quality import UX
+## Gate A6 — Production-quality UX + WMS appearance parity
 
-- [ ] Share Import sheet
-- [ ] simple `Audio / Video` choice
+- [ ] production Search Home polish
+- [ ] real provider result cards with canonical URLs
+- [ ] simple `Audio / Video` choice in Import Sheet
 - [ ] MP3 192 default
 - [ ] M4A where stable
 - [ ] video acquisition where stable
 - [ ] expandable advanced options
 - [ ] clear unsupported/private/login-required states
+- [ ] WMS skin system with canonical Web/PWA theme IDs
+- [ ] Appearance screen with visual preview tiles
+- [ ] selected skin persisted in DataStore
+- [ ] selected visualizer persisted in DataStore
+- [ ] audio-reactive visualizers ported where technically stable
+- [ ] reduced-motion / `minimal` option
 
-Exit: normal use does not look like a developer diagnostic screen.
+Exit: normal use looks and feels like native WMS rather than a developer diagnostic app, while preserving the Web/PWA visual identity.
 
 ## Gate A7 — Provider matrix
 
-For each candidate provider, record probe/acquire/playback results on the target device.
+For each candidate provider, record search/probe/acquire/playback results on the target device where applicable.
 
 - [x] YouTube public — Gate A0 feasibility sample PASS
+- [ ] direct public media URL
 - [ ] TikTok public
 - [ ] Instagram public/no-login-accessible
-- [ ] direct public media URL
 - [ ] additional sources only after explicit testing
 
-Never mark a provider broadly supported based only on one sample or extractor presence.
+Search support and acquisition support are separate capabilities. Never mark a provider supported merely because yt-dlp has an extractor or a search UI entry exists.
 
 ## Gate A8 — Development distribution
 
@@ -130,6 +157,18 @@ Never mark a provider broadly supported based only on one sample or extractor pr
 
 No Play Store work in the current plan.
 
+## Canonical WMS appearance IDs
+
+Android should preserve the original WMS identifiers in its architecture even if native renderers are delivered incrementally.
+
+Skins:
+
+`midnight-neon`, `obsidian`, `studio-light`, `analog-warm`, `cyber-blue`, `aurora-purple`, `emerald-night`, `crimson-noir`, `sunset-glow`, `sakura`, `pixel-arcade`, `led-marquee`, `retro-terminal`, `cassette-deck`
+
+Visualizer modes:
+
+`rainbow-ring`, `oscilloscope`, `spectrum-city`, `neon-tunnel`, `kaleido`, `particles`, `pulse`, `orbit`, `bars`, `wave`, `emblem`, `minimal`
+
 ## Current priority
 
-Gate A0 feasibility is proven. After PR #1 is merged, proceed to productizing the local acquisition path, starting with share intake hardening and managed acquisition jobs before persistent Library/Playlist/background playback.
+**Gate A1.** Build the native Search Home / Import Sheet shell first, while preserving the proven Gate A0 acquisition path. Keyword provider search can be wired incrementally behind the provider-neutral search boundary. Do not jump straight to Library/Playlist implementation before the intake shell is stable.

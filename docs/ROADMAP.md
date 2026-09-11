@@ -61,18 +61,22 @@ Goal: replace the Gate A0 developer-first screen with the first native WMS produ
 - [x] rights/permission confirmation remains explicit before save
 - [x] existing Gate A0 MP3 acquisition path remains usable through Import Sheet
 - [x] Gate A0 yt-dlp controls move to `Developer Tools`
+- [ ] keyword search returns working YouTube results on the target Android device
+- [ ] search result -> `WMSに追加` -> Probe -> save -> Mini Player passes on the target Android device
 
-Exit: satisfied on the target Android device.
+Verified entry paths so far:
 
-Verified entry paths:
+`direct/pasted URL -> automatic Probe -> rights confirmation -> MP3 save -> mini player -> Media3 playback` — PASS
 
-`keyword search -> YouTube result -> WMSに追加 -> automatic Probe -> rights confirmation -> MP3 save -> mini player -> Media3 playback`
+`Android share sheet -> WMS -> automatic Probe -> rights confirmation -> MP3 save -> mini player -> Media3 playback` — PASS
 
-`direct/pasted URL -> automatic Probe -> rights confirmation -> MP3 save -> mini player -> Media3 playback`
+Known current blocker:
 
-`Android share sheet -> WMS -> automatic Probe -> rights confirmation -> MP3 save -> mini player -> Media3 playback`
+- Android Search requests currently fail against the WMS Media Worker because the worker requires an allowed `Origin` header and the native client did not send one.
 
-**Gate A1: PASS**
+Exit: normal app launch looks like WMS Media Search, shared/pasted URL reliably reaches an automatically probed Import Sheet, and keyword Search works end-to-end on the target device.
+
+**Gate A1: OPEN**
 
 Follow-up quality checks that do not block Gate A1 closure:
 
@@ -186,4 +190,4 @@ Visualizer modes:
 
 ## Current priority
 
-**Gate A2.** Move acquisition work out of the Activity into a managed foreground job while preserving the proven Gate A1 Search/Share/Import flow. Gate A3 then turns completed acquisitions into a persistent Local Library.
+**Gate A1.** Fix native keyword Search against the WMS Media Worker and verify `Search -> result -> WMSに追加 -> Probe -> save -> Mini Player` on the target Android device before moving to Gate A2/A3.

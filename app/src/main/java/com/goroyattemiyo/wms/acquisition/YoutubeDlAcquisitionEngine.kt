@@ -34,29 +34,17 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
     override suspend fun initialize(): EngineState = withContext(Dispatchers.IO) {
         initMutex.withLock {
             if (initialized) {
-                return@withLock EngineState(
-                    ready = true,
-                    code = "READY",
-                    message = "取得エンジン準備完了",
-                )
+                return@withLock EngineState(true, "READY", "取得エンジン準備完了")
             }
 
             try {
                 YoutubeDL.getInstance().init(appContext)
                 FFmpeg.getInstance().init(appContext)
                 initialized = true
-                EngineState(
-                    ready = true,
-                    code = "READY",
-                    message = "取得エンジン準備完了",
-                )
+                EngineState(true, "READY", "取得エンジン準備完了")
             } catch (error: Throwable) {
                 val classified = classifyError(error, "RUNTIME_INIT")
-                EngineState(
-                    ready = false,
-                    code = classified.code,
-                    message = classified.message,
-                )
+                EngineState(false, classified.code, classified.message)
             }
         }
     }
@@ -65,13 +53,11 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
         runCatching {
             validateUrl(sourceUrl)
             ensureReady()
-
             val info = try {
                 YoutubeDL.getInstance().getInfo(sourceUrl.trim())
             } catch (error: Throwable) {
                 throw classifyError(error, "PROBE_FAILED")
             }
-
             ProbeResult(
                 title = info.title?.trim().orEmpty().ifBlank { "タイトル不明" },
                 provider = providerFor(sourceUrl),
@@ -83,7 +69,6 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
         runCatching {
             validateUrl(sourceUrl)
             ensureReady()
-
             val request = YoutubeDLRequest(sourceUrl.trim()).apply {
                 addOption("--verbose")
                 addOption("--simulate")
@@ -92,10 +77,9 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
 
             try {
                 val response = YoutubeDL.getInstance().execute(request)
-                val raw = "${response.err}\n${response.out}"
                 EngineDiagnostics(
                     executionSucceeded = true,
-                    lines = diagnosticLines(raw),
+                    lines = diagnosticLines("${response.err}\n${response.out}"),
                 )
             } catch (error: Throwable) {
                 val raw = buildString {
@@ -104,13 +88,8 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
                     append(error.cause?.message.orEmpty())
                 }
                 val lines = diagnosticLines(raw)
-                if (lines.isEmpty()) {
-                    throw classifyError(error, "DIAGNOSTIC_FAILED")
-                }
-                EngineDiagnostics(
-                    executionSucceeded = false,
-                    lines = lines,
-                )
+                if (lines.isEmpty()) throw classifyError(error, "DIAGNOSTIC_FAILED")
+                EngineDiagnostics(false, lines)
             }
         }
     }
@@ -130,41 +109,29 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
                 throw classifyError(error, "ACQUIRE_FAILED")
             }
 
-            if (info.duration > MAX_DURATION_SECONDS) {
-                throw AcquisitionEngineException(
-                    code = "DURATION_LIMIT",
-                    message = "Gate A0では30分以内のメディアだけを対象にします。",
-                )
-            }
-
             val outputRoot = File(
                 appContext.getExternalFilesDir(Environment.DIRECTORY_MUSIC) ?: appContext.filesDir,
                 "wms/acquired",
             ).apply { mkdirs() }
-
             val jobsRoot = File(appContext.cacheDir, "wms-acquisition-jobs").apply { mkdirs() }
             val jobDir = File(jobsRoot, "job-${UUID.randomUUID()}").apply { mkdirs() }
 
             try {
                 val request = YoutubeDLRequest(source).apply {
                     addOption("--no-playlist")
-                    addOption("--match-filter", "duration <= $MAX_DURATION_SECONDS")
-                    addOption("--max-filesize", "250M")
+                    addOption("--format", "bestaudio/best")
                     addOption("--extract-audio")
                     addOption("--audio-format", "mp3")
                     addOption("--audio-quality", "192K")
                     addOption("--no-write-thumbnail")
                     addOption("--no-write-info-json")
-                    addOption("--output", "${jobDir.absolutePath}/wms-a0-%(id)s.%(ext)s")
+                    addOption("--output", "${jobDir.absolutePath}/wms-%(id)s.%(ext)s")
                 }
 
                 onProgress(AcquisitionProgress(0f, "取得を開始しています"))
 
                 val response = try {
-                    YoutubeDL.getInstance().execute(
-                        request,
-                        PROCESS_ID,
-                    ) { progress: Float, _: Long, line: String ->
+                    YoutubeDL.getInstance().execute(request, PROCESS_ID) { progress: Float, _: Long, line: String ->
                         onProgress(
                             AcquisitionProgress(
                                 percent = progress.coerceIn(0f, 100f),
@@ -176,45 +143,33 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
                     throw classifyError(error, "ACQUIRE_FAILED")
                 }
 
-                val produced = jobDir
-                    .listFiles()
+                val produced = jobDir.listFiles()
                     ?.filter { it.isFile && it.extension.equals("mp3", ignoreCase = true) }
                     ?.maxByOrNull { it.lastModified() }
-
-                if (produced == null) {
-                    val executionText = "${response.out}\n${response.err}".lowercase()
-                    if (
-                        "does not pass filter" in executionText ||
-                        ("duration" in executionText && MAX_DURATION_SECONDS.toString() in executionText)
-                    ) {
-                        throw AcquisitionEngineException(
-                            code = "DURATION_LIMIT",
-                            message = "Gate A0では30分以内のメディアだけを対象にします。",
-                        )
-                    }
-                    throw AcquisitionEngineException(
-                        code = "OUTPUT_NOT_FOUND",
-                        message = "MP3生成後のファイルを確認できませんでした。",
+                    ?: throw AcquisitionEngineException(
+                        "OUTPUT_NOT_FOUND",
+                        "MP3生成後のファイルを確認できませんでした。診断: ${safeDiagnostic("${response.err}\n${response.out}")}",
                     )
-                }
 
                 val destination = File(outputRoot, "wms-${UUID.randomUUID()}.mp3")
-                if (!produced.renameTo(destination)) {
-                    produced.copyTo(destination, overwrite = false)
+                try {
+                    if (!produced.renameTo(destination)) {
+                        produced.copyTo(destination, overwrite = false)
+                    }
+                } catch (error: Throwable) {
+                    throw classifyError(error, "SAVE_FAILED")
                 }
 
                 if (!destination.exists() || destination.length() <= 0L) {
                     throw AcquisitionEngineException(
-                        code = "OUTPUT_INVALID",
-                        message = "生成ファイルが空か、保存を確認できませんでした。",
+                        "OUTPUT_INVALID",
+                        "生成ファイルが空か、保存を確認できませんでした。",
                     )
                 }
 
-                val title = info.title?.trim().orEmpty().ifBlank { "保存済み音声" }
-
                 AcquisitionResult(
                     file = destination,
-                    title = title,
+                    title = info.title?.trim().orEmpty().ifBlank { "保存済み音声" },
                     provider = providerFor(sourceUrl),
                 )
             } finally {
@@ -224,27 +179,21 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
     }
 
     override fun cancel() {
-        runCatching {
-            YoutubeDL.getInstance().destroyProcessById(PROCESS_ID)
-        }
+        runCatching { YoutubeDL.getInstance().destroyProcessById(PROCESS_ID) }
     }
 
     private suspend fun ensureReady() {
         if (initialized) return
         val state = initialize()
-        if (!state.ready) {
-            throw AcquisitionEngineException(state.code, state.message)
-        }
+        if (!state.ready) throw AcquisitionEngineException(state.code, state.message)
     }
 
     private fun validateUrl(raw: String) {
-        val value = raw.trim()
         val uri = try {
-            URI(value)
+            URI(raw.trim())
         } catch (error: Exception) {
             throw AcquisitionEngineException("INVALID_URL", "HTTP(S) URLを確認してください。", error)
         }
-
         val scheme = uri.scheme?.lowercase()
         if (scheme !in setOf("http", "https") || uri.host.isNullOrBlank()) {
             throw AcquisitionEngineException("INVALID_URL", "HTTP(S) URLを確認してください。")
@@ -257,9 +206,9 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
     private fun providerFor(raw: String): String {
         val host = runCatching { URI(raw.trim()).host?.lowercase().orEmpty() }.getOrDefault("")
         return when {
-            host == "youtu.be" || host.endsWith(".youtube.com") || host == "youtube.com" -> "YouTube"
-            host.endsWith(".tiktok.com") || host == "tiktok.com" -> "TikTok"
-            host.endsWith(".instagram.com") || host == "instagram.com" -> "Instagram"
+            host == "youtu.be" || host == "youtube.com" || host.endsWith(".youtube.com") -> "YouTube"
+            host == "tiktok.com" || host.endsWith(".tiktok.com") -> "TikTok"
+            host == "instagram.com" || host.endsWith(".instagram.com") -> "Instagram"
             host.isNotBlank() -> host
             else -> "Web"
         }
@@ -289,16 +238,12 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
             "http error 403",
             "forbidden",
             "no supported javascript runtime",
+            "no space left on device",
         )
-
-        return raw
-            .lineSequence()
+        return raw.lineSequence()
             .map { it.trim() }
             .filter { it.isNotBlank() }
-            .filter { line ->
-                val lower = line.lowercase()
-                keys.any { key -> key in lower }
-            }
+            .filter { line -> keys.any { key -> key in line.lowercase() } }
             .map(::sanitizeDiagnosticLine)
             .distinct()
             .take(MAX_DIAGNOSTIC_LINES)
@@ -306,18 +251,15 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
             .ifEmpty { listOf("対象となる診断行は取得できませんでした") }
     }
 
-    private fun sanitizeDiagnosticLine(raw: String): String {
-        return raw
-            .replace(Regex("https?://\\S+", RegexOption.IGNORE_CASE), "[URL]")
-            .replace(Regex("/data/\\S+", RegexOption.IGNORE_CASE), "[APP_PATH]")
-            .replace(Regex("/storage/\\S+", RegexOption.IGNORE_CASE), "[STORAGE_PATH]")
-            .replace(Regex("\\s+"), " ")
-            .take(320)
-    }
+    private fun sanitizeDiagnosticLine(raw: String): String = raw
+        .replace(Regex("https?://\\S+", RegexOption.IGNORE_CASE), "[URL]")
+        .replace(Regex("/data/\\S+", RegexOption.IGNORE_CASE), "[APP_PATH]")
+        .replace(Regex("/storage/\\S+", RegexOption.IGNORE_CASE), "[STORAGE_PATH]")
+        .replace(Regex("\\s+"), " ")
+        .take(320)
 
     private fun classifyError(error: Throwable, fallbackCode: String): AcquisitionEngineException {
         if (error is AcquisitionEngineException) return error
-
         val rawText = buildString {
             append(error.message.orEmpty())
             append('\n')
@@ -326,93 +268,78 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
         val text = rawText.lowercase()
 
         return when {
-            "unsupported version of python" in text ||
-                "python versions 3.10" in text ||
-                "requires-python" in text ->
+            "no space left on device" in text || "enospc" in text || "errno 28" in text ->
+                AcquisitionEngineException(
+                    "STORAGE_FULL",
+                    "端末の空き容量が不足しています。不要なファイルを削除して再試行してください。",
+                    error,
+                )
+            "unsupported version of python" in text || "requires-python" in text ->
                 AcquisitionEngineException(
                     "PYTHON_RUNTIME_TOO_OLD",
                     "内蔵Pythonと現在のyt-dlp要件が一致していません。取得エンジンの更新が必要です。",
                     error,
                 )
-
             "no supported javascript runtime" in text ||
-                "javascript runtime" in text && "deprecated" in text ||
+                ("javascript runtime" in text && "deprecated" in text) ||
                 "js challenge" in text ||
-                "jsc" in text && "unavailable" in text ||
                 "nsig extraction failed" in text ||
                 "signature extraction failed" in text ->
                 AcquisitionEngineException(
                     "JS_RUNTIME_REQUIRED",
-                    "YouTubeの現在の取得方式にはJavaScriptランタイムが必要です。Android取得エンジンへQuickJS等を追加する必要があります。",
+                    "YouTubeの現在の取得方式にはJavaScriptランタイムが必要です。",
                     error,
                 )
-
-            "yt-dlp-ejs" in text ||
-                "ejs" in text && ("not installed" in text || "missing" in text || "unavailable" in text) ->
+            "yt-dlp-ejs" in text || ("ejs" in text && ("missing" in text || "unavailable" in text)) ->
                 AcquisitionEngineException(
                     "EJS_COMPONENT_REQUIRED",
-                    "YouTubeのJavaScriptチャレンジ用EJSコンポーネントが不足しています。取得エンジンへの追加が必要です。",
+                    "YouTubeのJavaScriptチャレンジ用EJSコンポーネントが不足しています。",
                     error,
                 )
-
             "cookie" in text || "login" in text || "sign in" in text ->
                 AcquisitionEngineException(
                     "LOGIN_REQUIRED",
                     "このURLはログインやCookieを必要とするため、現在のWMS対象外です。",
                     error,
                 )
-
             "drm" in text ->
                 AcquisitionEngineException(
                     "DRM_OR_PROTECTED",
                     "保護されたメディアは現在のWMS対象外です。",
                     error,
                 )
-
             "requested format is not available" in text ||
                 "only images are available" in text ||
                 "no video formats found" in text ->
                 AcquisitionEngineException(
                     "FORMAT_UNAVAILABLE",
-                    "このURLでは現在のAndroid取得エンジンが利用可能な音声形式を取得できませんでした。",
+                    "このURLでは利用可能な音声形式を取得できませんでした。",
                     error,
                 )
-
             "http error 403" in text || "forbidden" in text ->
                 AcquisitionEngineException(
                     "SOURCE_FORBIDDEN",
                     "配信元から取得が拒否されました。診断: ${safeDiagnostic(rawText)}",
                     error,
                 )
-
             "ffmpeg" in text && ("error" in text || "failed" in text || "not found" in text) ->
                 AcquisitionEngineException(
                     "FFMPEG_FAILED",
-                    "音声変換処理で失敗しました。Android FFmpeg構成を確認する必要があります。",
+                    "音声変換処理で失敗しました。",
                     error,
                 )
-
             "unsupported url" in text || "no suitable extractor" in text ->
                 AcquisitionEngineException(
                     "UNSUPPORTED_SOURCE",
                     "この公開URLは現在の取得エンジンで処理できません。",
                     error,
                 )
-
             "private video" in text || "unavailable" in text || "not available" in text ->
                 AcquisitionEngineException(
                     "UNAVAILABLE",
                     "このメディアは公開状態または利用可能状態を確認できません。",
                     error,
                 )
-
-            "duration" in text && MAX_DURATION_SECONDS.toString() in text ->
-                AcquisitionEngineException(
-                    "DURATION_LIMIT",
-                    "Gate A0では30分以内のメディアだけを対象にします。",
-                    error,
-                )
-
             else -> AcquisitionEngineException(
                 fallbackCode,
                 "取得エンジンで処理できませんでした。診断: ${safeDiagnostic(rawText)}",
@@ -422,8 +349,7 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
     }
 
     private fun safeDiagnostic(raw: String): String {
-        val compact = raw
-            .lineSequence()
+        val compact = raw.lineSequence()
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .firstOrNull { line ->
@@ -431,14 +357,11 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
                 "error" in lower || "warning" in lower || "failed" in lower || "unable" in lower
             }
             ?: raw.lineSequence().map { it.trim() }.firstOrNull { it.isNotBlank() }.orEmpty()
-
-        if (compact.isBlank()) return "詳細なし"
-        return sanitizeDiagnosticLine(compact).take(220)
+        return sanitizeDiagnosticLine(compact).take(220).ifBlank { "詳細なし" }
     }
 
     private companion object {
-        const val PROCESS_ID = "wms-gate-a0"
-        const val MAX_DURATION_SECONDS = 1800
+        const val PROCESS_ID = "wms-acquisition"
         const val MAX_DIAGNOSTIC_LINES = 12
     }
 }

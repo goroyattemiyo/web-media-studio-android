@@ -70,7 +70,7 @@ class LocalYoutubeSearchProvider(context: Context) : SearchProvider {
             item.optString("channel_id"),
             item.optString("uploader_id"),
         )
-            .map(String::cleanJsonString)
+            .map { it.cleanJsonString() }
             .firstOrNull { it.isNotBlank() }
             ?: "YouTube"
 

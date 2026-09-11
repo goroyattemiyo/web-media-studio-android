@@ -10,17 +10,15 @@ Current active branch:
 
 `feat/gate-a1-share-intake`
 
-Draft PR:
+PR:
 
 `#3 feat: Gate A1 Search Home and share intake shell`
 
 Gate A0 is merged to `main` and remains the proven local-acquisition baseline.
 
-Current target:
+**Gate A1 — Search Home + Android intake shell: PASS on the target Android device.**
 
-**Gate A1 — Search Home + Android share/URL intake productization.**
-
-Gate A1 is still OPEN until the search-result import/save/playback route passes end-to-end on the target Android device.
+The branch is ready for final CI and squash merge.
 
 ## Gate A0 baseline already proven
 
@@ -28,37 +26,39 @@ On the target Android device a permitted/public YouTube sample completed:
 
 `Update yt-dlp stable -> Probe -> rights confirmation -> Save MP3 192 -> non-empty local file -> Media3 Play`
 
-Successful active yt-dlp version: `2026.08.19`.
+Successful active yt-dlp version during the original Gate A0 run: `2026.08.19`.
 
-## Implemented on Gate A1 branch
+## Implemented in Gate A1
 
 - canonical WMS neon-diamond emblem adapted into Android resources and app identity
-- default launch surface changed from diagnostic screen to WMS Search Home
-- one primary input accepts either a search query or a direct HTTP(S) URL
+- default launch surface changed from developer diagnostics to WMS Search Home
+- one primary field accepts either a keyword query or direct HTTP(S) URL
 - direct URL bypasses keyword search and opens the Import Sheet
 - Android `ACTION_SEND text/plain` shared URL opens the same Import Sheet path
 - shared/manual URL automatically runs Probe before save
 - repeated intake of the same URL forces a fresh Probe
-- stale Probe completions are prevented from overwriting the current intake state
+- stale Probe completions cannot overwrite the current intake state
 - changing/reimporting a URL resets rights confirmation to OFF
 - rights/permission confirmation remains mandatory before local acquisition
 - proven MP3 192 local-acquisition path is preserved
-- yt-dlp stable is checked automatically at most once per 24 hours after acquisition-engine initialization
+- yt-dlp stable is checked automatically at most once per 24 hours
 - automatic yt-dlp update failure preserves the existing/bundled version and does not block normal use
-- search waits for yt-dlp update/initialization so local search does not race the updater
-- Developer tools keeps a manual yt-dlp update action only as a force-check/fallback
-- verbose yt-dlp diagnostics remain behind Developer tools
+- local Search waits for yt-dlp update/initialization so Search cannot race the updater
+- Developer tools retains manual yt-dlp update only as a force-check/fallback plus diagnostics
 - saved local media appears in a WMS-styled mini player on Search Home
-- future `Search / Library / Playlist` navigation shell is visible without pretending Library/Playlist are implemented
-- search is isolated behind a `SearchProvider` abstraction
+- `Search / Library / Playlist` navigation shell is visible without pretending unfinished destinations are implemented
+- Search is isolated behind a `SearchProvider` abstraction
 - Android keyword Search uses on-device yt-dlp `ytsearch`
-- local search parses flat JSON results into title, author, canonical YouTube URL, thumbnail and duration
-- Search result cards show actual thumbnails when available and display duration as `m:ss` or `h:mm:ss`
-- selecting `WMSに追加` passes the result URL into the existing Import Sheet / acquisition flow
+- local Search parses title, author, canonical YouTube URL, thumbnail and duration
+- Search result cards show actual thumbnails when available
+- Search result cards display duration as `m:ss` or `h:mm:ss`
+- `WMSに追加` routes a selected result into the same Probe / Import Sheet / save flow
 - `元サイト` opens the canonical source URL externally
-- the obsolete Cloud Run YouTube search provider has been removed from the Android app source
-- app build was bumped through versionCode `4`; current branch build is `0.1.2-a1-search-lock`
-- future TikTok / Instagram / Web providers remain disabled until actual search integration exists
+- obsolete Cloud Run YouTube Search code was removed from the Android app
+- the previous fixed 30-minute / 250 MB acquisition limits were removed so long-form authorized media can be attempted
+- storage exhaustion is surfaced as a user-facing storage-capacity error instead of being treated as a length limit
+- current Gate A1 app build is `0.1.2-a1-search-lock`, versionCode `4`
+- future TikTok / Instagram / Web providers remain disabled until actual integration exists
 
 ## Current SearchProvider boundary
 
@@ -76,9 +76,9 @@ canonical YouTube URL
 MediaAcquisitionEngine
 ```
 
-Search and acquisition support are deliberately separate. A source must not be described as downloadable merely because it can appear in search results.
+Search and acquisition support remain separate capabilities. A source must not be described as downloadable merely because it appears in Search.
 
-## CI status
+## Final CI baseline before Gate A1 acceptance
 
 Android CI #61 for head `fd6ca7c4aef29ec46b7af07a8fd1e62932f0550d`:
 
@@ -87,9 +87,9 @@ Android CI #61 for head `fd6ca7c4aef29ec46b7af07a8fd1e62932f0550d`:
 - lint: PASS
 - debug APK artifact: PASS
 
-The previous Worker-backed Search path reached Cloud Run but returned HTTP 503 because `YOUTUBE_DATA_API_KEY` was not configured. Android Search no longer depends on that path.
+A final docs-only CI is expected after this acceptance record is committed.
 
-## Verified on the real device for Gate A1
+## Real-device verification — Gate A1 PASS
 
 ### Direct URL intake — PASS
 
@@ -103,9 +103,9 @@ Verified sample:
 
 `YouTube app/browser -> Android share sheet -> WMS -> Import Sheet -> automatic Probe -> rights confirmation -> MP3 save -> Search Home mini player -> Media3 playback`
 
-### Keyword Search result display — PASS
+### Keyword Search — PASS
 
-Target-device verification on 2026-09-12 JST confirmed that the local yt-dlp Search path returns YouTube results without `SEARCH_HTTP_503`.
+Target-device verification on 2026-09-12 JST confirmed on-device yt-dlp Search works without the previous Cloud Run HTTP 503 dependency.
 
 Observed sample query:
 
@@ -115,32 +115,26 @@ Observed result count:
 
 `8`
 
-A later build initially exposed a Python traceback when search raced the automatic yt-dlp update. After serializing local Search behind the yt-dlp update lock, real-device Search passed again. The successful build also displays search-result thumbnails and durations.
+After serializing Search behind the yt-dlp update lock, the target device again returned results successfully. The successful build also displays thumbnails and durations.
 
-This proves:
+### Search-result import/save/playback — PASS
 
-`Search Home -> yt-dlp update/init lock -> local yt-dlp ytsearch -> thumbnail/duration result list`
+Final target-device verification on 2026-09-12 JST completed:
 
-The remaining Gate A1 acceptance check is the downstream result-action path:
+`keyword Search -> thumbnail/duration result -> WMSに追加 -> automatic Probe -> rights confirmation -> MP3 save -> 閉じて再生 -> 最近追加したメディア -> Media3 playback`
 
-`result -> WMSに追加 -> automatic Probe -> rights confirmation -> MP3 save -> Search Home mini-player playback`
+This satisfies the Gate A1 exit condition.
 
-## Still to verify before closing Gate A1
+**Gate A1: PASS**
 
-- select one local Search result and open `WMSに追加`
-- confirm automatic Probe in the Import Sheet
-- save MP3 after rights confirmation
-- use `閉じて再生`
-- confirm the saved item remains visible under `最近追加したメディア`
-- confirm Media3 playback succeeds from the Search Home mini player
-
-Quality checks that can follow Gate A1 closure:
+## Non-blocking follow-up quality items
 
 - correct Search Home top inset so `Find media` does not overlap the Android status bar
 - screen rotation / narrow-device layout behavior
 - observe automatic yt-dlp stable refresh after the 24-hour check window
+- improve adaptive launcher icon parity with the canonical Web/PWA icon where needed
 
-## Still deferred
+## Deferred to later gates
 
 - persistent search history
 - persistent Room Local Library
@@ -155,7 +149,7 @@ Quality checks that can follow Gate A1 closure:
 ## Product/security boundaries
 
 - permitted/public or otherwise authorized media only
-- local acquisition remains explicit; search never auto-downloads
+- local acquisition remains explicit; Search never auto-downloads
 - rights confirmation remains mandatory
 - no account cookies in MVP
 - no proxy rotation
@@ -163,16 +157,8 @@ Quality checks that can follow Gate A1 closure:
 - no authentication/access-control bypass
 - no arbitrary yt-dlp flags in normal UI
 
-## Next acceptance event
+## Next engineering step
 
-On the target Android device:
+Finish PR #3 with final CI and squash merge. After merge, start the next branch from `main`.
 
-1. choose one of the displayed YouTube Search results,
-2. tap `WMSに追加`,
-3. confirm automatic Probe,
-4. confirm rights and save MP3,
-5. tap `閉じて再生`,
-6. confirm the saved media remains under `最近追加したメディア`,
-7. confirm playback from the Search Home mini player.
-
-Keep PR #3 Draft until this final Search-result route passes.
+The roadmap currently places managed acquisition jobs at Gate A2 and persistent Local Library at Gate A3. The known Search Home top-inset issue can be fixed as a small post-Gate-A1 quality change before or alongside the next gate.

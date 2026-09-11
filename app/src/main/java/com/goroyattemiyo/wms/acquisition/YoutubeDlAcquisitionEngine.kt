@@ -302,7 +302,7 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
             "http error 403" in text || "forbidden" in text ->
                 AcquisitionEngineException(
                     "SOURCE_FORBIDDEN",
-                    "配信元から取得が拒否されました。現在の取得方式ではこのメディアを保存できません。",
+                    "配信元から取得が拒否されました。診断: ${safeDiagnostic(rawText)}",
                     error,
                 )
 

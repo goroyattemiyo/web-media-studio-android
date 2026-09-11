@@ -21,6 +21,9 @@ data class GateA0UiState(
     val engineMessage: String = "取得エンジンを準備しています",
     val ytdlpVersion: String? = null,
     val updatingYtdlp: Boolean = false,
+    val diagnosing: Boolean = false,
+    val diagnosticSucceeded: Boolean? = null,
+    val diagnosticLines: List<String> = emptyList(),
     val probing: Boolean = false,
     val detectedTitle: String? = null,
     val detectedProvider: String? = null,
@@ -65,6 +68,7 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
         if (
             !snapshot.engineReady ||
             snapshot.updatingYtdlp ||
+            snapshot.diagnosing ||
             snapshot.probing ||
             snapshot.acquiring
         ) {
@@ -120,6 +124,45 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun runDiagnostics() {
+        val snapshot = _uiState.value
+        val sourceUrl = snapshot.url.trim()
+        if (
+            sourceUrl.isBlank() ||
+            !snapshot.engineReady ||
+            snapshot.updatingYtdlp ||
+            snapshot.diagnosing ||
+            snapshot.probing ||
+            snapshot.acquiring
+        ) {
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    diagnosing = true,
+                    diagnosticSucceeded = null,
+                    diagnosticLines = emptyList(),
+                    errorCode = null,
+                    errorMessage = null,
+                )
+            }
+
+            engine.diagnose(sourceUrl)
+                .onSuccess { diagnostic ->
+                    _uiState.update {
+                        it.copy(
+                            diagnosing = false,
+                            diagnosticSucceeded = diagnostic.executionSucceeded,
+                            diagnosticLines = diagnostic.lines,
+                        )
+                    }
+                }
+                .onFailure(::showFailure)
+        }
+    }
+
     private suspend fun readYoutubeDlVersion(): String = withContext(Dispatchers.IO) {
         val youtubeDl = YoutubeDL.getInstance()
         youtubeDl.version(app)
@@ -154,6 +197,8 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
                 url = value,
                 detectedTitle = null,
                 detectedProvider = null,
+                diagnosticSucceeded = null,
+                diagnosticLines = emptyList(),
                 savedPath = null,
                 savedTitle = null,
                 errorCode = null,
@@ -184,6 +229,7 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
         if (
             sourceUrl.isBlank() ||
             snapshot.updatingYtdlp ||
+            snapshot.diagnosing ||
             snapshot.probing ||
             snapshot.acquiring
         ) {
@@ -222,6 +268,7 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
             !snapshot.engineReady ||
             !snapshot.rightsConfirmed ||
             snapshot.updatingYtdlp ||
+            snapshot.diagnosing ||
             snapshot.acquiring ||
             snapshot.probing
         ) {
@@ -286,6 +333,7 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
 
         _uiState.update {
             it.copy(
+                diagnosing = false,
                 probing = false,
                 acquiring = false,
                 errorCode = code,

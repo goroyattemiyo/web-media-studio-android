@@ -20,7 +20,7 @@ Current target:
 
 **Gate A1 — Search Home + Android share/URL intake productization.**
 
-Gate A1 is still OPEN because keyword Search is failing on the target Android device.
+Gate A1 is still OPEN until keyword Search passes on the target Android device.
 
 ## Gate A0 baseline already proven
 
@@ -52,8 +52,10 @@ Successful active yt-dlp version: `2026.08.19`.
 - search is isolated behind a `SearchProvider` abstraction
 - first concrete provider targets the existing WMS Media Worker YouTube search endpoint
 - search results model title, author, provider and canonical source URL
-- selecting `WMSに追加` is designed to pass the result URL into the existing Import Sheet / acquisition flow
+- selecting `WMSに追加` passes the result URL into the existing Import Sheet / acquisition flow
 - `元サイト` opens the canonical source URL externally
+- native Search now sends the allowed first-party WMS `Origin` required by the Media Worker
+- Search HTTP errors now surface the worker `detail` message so provider/config failures are visible on-device
 - future TikTok / Instagram / Web providers remain disabled until actual search integration exists
 
 ## Current SearchProvider boundary
@@ -76,58 +78,43 @@ Search and acquisition support are deliberately separate. A source must not be d
 
 ## CI status
 
-Android CI #34 for automatic yt-dlp refresh head `e405eeefe01fccb09847ab46ce2326fdb7f1686e`:
+Android CI #41 for native Search Origin fix head `56543eba68d4fc541e2825bb71fafc68f13e49c1`:
 
 - build: PASS
 - unit tests: PASS
 - lint: PASS
 - debug APK artifact: PASS
 
-Automatic daily yt-dlp stable refresh was added in commit `e405eeefe01fccb09847ab46ce2326fdb7f1686e`. The policy is best-effort and rate-limited to once per 24 hours using app preferences; normal use falls back to the current version if the update check fails.
-
-A later same-URL re-intake bug was fixed in commit `e43e6593cb70d55e38f64378796a340f38ddde87` by moving Probe initiation into the intake path and resetting stale per-URL state.
+Android CI #34 for automatic yt-dlp refresh head `e405eeefe01fccb09847ab46ce2326fdb7f1686e` also passed build / tests / lint / APK upload.
 
 ## Verified on the real device for Gate A1
 
 ### Direct URL intake — PASS
 
-The following direct-URL intake flow is verified on the target Android device:
-
-1. a YouTube URL is accepted by the Gate A1 Import Sheet,
-2. Probe succeeds,
-3. title/provider are displayed under `取得候補`,
-4. rights confirmation can be enabled,
-5. MP3 save completes successfully,
-6. the sheet displays `保存完了` with the saved title,
-7. closing the sheet returns to Search Home,
-8. the saved item plays successfully from the Search Home mini player.
+`URL intake -> automatic Probe -> Import Sheet -> rights confirmation -> MP3 save -> Search Home mini player -> Media3 playback`
 
 Verified sample:
 
 `Michael Jackson - Beat It (Official 4K Video)`
 
-Confirmed path:
-
-`URL intake -> automatic Probe -> Import Sheet -> rights confirmation -> MP3 save -> Search Home mini player -> Media3 playback`
-
 ### Android share intake — PASS
-
-The external Android sharing route is verified on the target device:
 
 `YouTube app/browser -> Android share sheet -> WMS -> Import Sheet -> automatic Probe -> rights confirmation -> MP3 save -> Search Home mini player -> Media3 playback`
 
-### Keyword Search — FAIL / OPEN
+### Keyword Search — FIX BUILT / RE-TEST REQUIRED
 
-Keyword Search is not yet verified and currently fails on the target Android device.
+The previously tested build failed native keyword Search.
 
 Root cause found in code review:
 
 - the WMS Media Worker requires an allowed `Origin` header for `/video/providers` and `/video/search`,
 - the Web/PWA receives that header naturally from the browser,
 - the Android `HttpURLConnection` search client did not set it,
-- therefore native Search can be rejected before provider search runs.
+- therefore native Search could be rejected before provider search ran.
 
-The Android provider must be corrected and then re-tested end-to-end.
+Fix landed in commit `56543eba68d4fc541e2825bb71fafc68f13e49c1` and CI #41 passes. Real-device re-test is still required before Search can be marked PASS.
+
+If the worker returns another non-2xx status, Android now displays the worker detail text in addition to the HTTP code so the next blocker can be identified directly.
 
 ## Still to verify before closing Gate A1
 
@@ -165,13 +152,13 @@ Quality checks that can follow Gate A1 closure:
 
 ## Next acceptance event
 
-Fix native Search request compatibility with the WMS Media Worker, then verify on the target Android device:
+Using the CI #41 APK on the target Android device:
 
-1. app launches to Search Home,
+1. launch Search Home,
 2. enter a normal keyword,
-3. receive YouTube search results,
+3. confirm YouTube search results appear,
 4. choose `WMSに追加`,
-5. automatic Probe succeeds,
+5. confirm automatic Probe,
 6. confirm rights and save MP3,
 7. close the sheet and play from the Search Home mini player.
 

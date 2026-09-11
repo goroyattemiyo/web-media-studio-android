@@ -4,51 +4,84 @@ Last updated: 2026-09-11 JST
 
 ## Repository state
 
-This repository is the new Android-native WMS track.
+This repository is the Android-native WMS track.
 
-Current active branch during bootstrap:
+Current active branch:
 
 `feat/gate-a0-bootstrap`
+
+Draft PR:
+
+`#1 feat: bootstrap Android Gate A0 local acquisition spike`
+
+PR #1 must remain Draft and must not be merged until Gate A0 succeeds on a real device.
 
 Current target:
 
 **Gate A0 — prove local Android acquisition before building the full native product.**
 
-## Implemented/committed in the current bootstrap line
+## Implemented in the current Gate A0 line
 
-- repository initialized
-- Android source-of-truth docs
-- Gate A0-first development rule
-- Kotlin/Compose application skeleton being added
-- replaceable `MediaAcquisitionEngine` boundary being added
-- youtubedl-android + FFmpeg candidate being added only as the first feasibility implementation
-- Media3 local preview being added for produced-file validation
-- GitHub Actions debug APK build target being added
+- Kotlin + Jetpack Compose application skeleton
+- replaceable `MediaAcquisitionEngine` boundary
+- `youtubedl-android` + FFmpeg feasibility engine
+- Media3 local preview for produced-file validation
+- Android `ACTION_SEND text/plain` URL intake plus manual URL input
+- URL validation and credential-bearing URL rejection
+- explicit rights/permission confirmation before acquisition
+- controlled MP3 192 kbps acquisition
+- 30-minute Gate A0 duration guard
+- one acquisition process at a time plus cancel
+- sanitized/classified extractor diagnostics
+- GitHub Actions build / unit test / lint / debug APK artifact pipeline
+- Gate A0 diagnostic display of the active yt-dlp version
+- explicit `Update yt-dlp stable` action using `updateYoutubeDL(..., UpdateChannel.STABLE)`
+- update failure keeps the existing installed/bundled yt-dlp version and reports `YTDLP_UPDATE_FAILED`
+- Probe/acquisition controls are disabled while yt-dlp is being updated
+
+The app does **not** blindly update yt-dlp during startup. Runtime update is an explicit Gate A0 diagnostic action.
+
+## Verified on real Android device
+
+- APK installs and launches
+- Acquisition Engine initializes as `READY`
+- public YouTube metadata Probe succeeds and returns title/provider
+
+## Current real-device failures / open questions
+
+### YouTube acquisition
+
+The previously tested public YouTube URL reached Probe PASS, but MP3 acquisition returned:
+
+`SOURCE_FORBIDDEN`
+
+This does not yet prove a JavaScript runtime problem. The same URL must be retested after explicit stable yt-dlp update.
+
+### TikTok Probe
+
+The previously tested public TikTok URL returned `PROBE_FAILED` and exposed:
+
+`WARNING: Your yt-dlp version (2025.11.12) is older than 90 days!`
+
+This stale active yt-dlp version is the immediate hypothesis being tested by the new stable-update action.
 
 ## Not yet verified
 
-None of the following may be described as supported until tested:
+None of the following may be described as supported until tested successfully on the target device:
 
-- youtubedl-android runtime initialization on the target device
-- YouTube acquisition on Android
-- TikTok acquisition on Android
-- Instagram acquisition on Android
-- direct media URL acquisition on Android
-- MP3 extraction success
+- stable yt-dlp runtime update on Android
+- YouTube MP3 acquisition
+- TikTok acquisition
+- Instagram acquisition
+- direct media URL acquisition
+- produced MP3 playback through Media3 after a successful acquisition
 - background playback
-- Android share-intent flow
-- Room persistence
+- persistent Room library
 - persistent playlists
-
-## Known extractor risk
-
-The first candidate library currently advertises youtubedl-android `0.18.1`, while its public README still mentions a bundled Python 3.8 runtime. Modern yt-dlp versions require a newer Python runtime, so the application must not blindly update yt-dlp at startup.
-
-Gate A0 intentionally answers this question with a real APK/runtime test. If the packaged runtime is not viable, the approved architecture keeps the rest of WMS unchanged and replaces only the `MediaAcquisitionEngine` implementation.
 
 ## Product/security boundaries
 
-- permitted media only
+- permitted/public or otherwise authorized media only
 - local device acquisition
 - no account cookies in MVP
 - no proxy rotation
@@ -58,8 +91,16 @@ Gate A0 intentionally answers this question with a real APK/runtime test. If the
 
 ## Next acceptance event
 
-CI must first produce an installable debug APK. Then the target Android device must run the A0 sequence:
+Install the CI-built APK and run the same test URLs in this order:
 
-`URL -> Probe -> rights confirmation -> Save MP3 192 -> Play`
+1. confirm displayed active yt-dlp version,
+2. tap `Update yt-dlp stable`,
+3. confirm the displayed version/update result,
+4. YouTube: Probe -> rights confirmation -> Save MP3 192 -> Media3 Play,
+5. TikTok: Probe -> rights confirmation -> Save MP3 192 -> Media3 Play where Probe succeeds.
 
-Do not mark Gate A0 PASS until that real-device sequence succeeds for at least one permitted public source.
+Only if current stable yt-dlp still returns an actual JS/EJS-specific diagnostic should Gate A0 move to JavaScript-runtime work.
+
+Do not mark Gate A0 PASS until at least one authorized/public source completes:
+
+`Probe -> Save MP3 -> non-empty local file -> Media3 Play`

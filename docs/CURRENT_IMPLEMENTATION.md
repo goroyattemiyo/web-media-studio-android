@@ -4,107 +4,122 @@ Last updated: 2026-09-11 JST
 
 ## Repository state
 
-This repository is the Android-native WMS track.
+Repository: `goroyattemiyo/web-media-studio-android`
 
 Current active branch:
 
-`feat/gate-a0-bootstrap`
+`feat/gate-a1-share-intake`
 
 Draft PR:
 
-`#1 feat: bootstrap Android Gate A0 local acquisition spike`
+`#3 feat: Gate A1 Search Home and share intake shell`
 
-Gate A0 has now passed on a real Android device for a permitted/public YouTube sample. PR #1 may proceed toward merge after the latest CI for the branch is green.
+Gate A0 is merged to `main` and remains the proven local-acquisition baseline.
 
 Current target:
 
-**Gate A0 — PASS. Prepare transition to Gate A1+ product work after merge.**
+**Gate A1 — Search Home + Android share/URL intake productization.**
 
-## Implemented in the current Gate A0 line
+## Gate A0 baseline already proven
 
-- Kotlin + Jetpack Compose application skeleton
-- replaceable `MediaAcquisitionEngine` boundary
-- `youtubedl-android` + FFmpeg feasibility engine
-- Media3 local preview for produced-file validation
-- Android `ACTION_SEND text/plain` URL intake plus manual URL input
-- URL validation and credential-bearing URL rejection
-- explicit rights/permission confirmation before acquisition
-- controlled MP3 192 kbps acquisition
-- 30-minute Gate A0 duration guard
-- one acquisition process at a time plus cancel
-- sanitized/classified extractor diagnostics
-- GitHub Actions build / unit test / lint / debug APK artifact pipeline
-- active yt-dlp version display
-- explicit `Update yt-dlp stable` action using `updateYoutubeDL(..., UpdateChannel.STABLE)`
-- update failure fallback to existing bundled/installed yt-dlp
-- Probe/acquisition controls disabled while yt-dlp is being updated
-- explicit `yt-dlp Diagnostics` action using `--verbose --simulate --no-playlist`
-- sanitized extraction of relevant runtime/provider lines
+On the target Android device a permitted/public YouTube sample completed:
 
-The app does **not** blindly update yt-dlp during startup. Runtime update remains an explicit diagnostic/user action.
+`Update yt-dlp stable -> Probe -> rights confirmation -> Save MP3 192 -> non-empty local file -> Media3 Play`
 
-## Verified on real Android device
+Successful active yt-dlp version: `2026.08.19`.
 
-The following path has passed end-to-end on the target device:
+## Implemented on Gate A1 branch
 
-1. APK installs and launches.
-2. Acquisition Engine initializes as `READY`.
-3. `Update yt-dlp stable` succeeds.
-4. Active yt-dlp version displays as `2026.08.19`.
-5. Public YouTube metadata Probe succeeds and returns title/provider.
-6. Rights/permission confirmation can be enabled.
-7. `Save audio / MP3 192 kbps` completes successfully.
-8. A non-empty MP3 file is written under app-specific Android storage.
-9. Media3 local preview opens the produced file.
-10. Playback succeeds; the UI shows `Pause` while audio is playing.
+- canonical WMS neon-diamond emblem adapted into Android resources and app identity
+- default launch surface changed from diagnostic screen to WMS Search Home
+- one primary input accepts either a search query or a direct HTTP(S) URL
+- direct URL bypasses keyword search and opens the Import Sheet
+- Android `ACTION_SEND text/plain` shared URL opens the same Import Sheet path
+- shared/manual URL automatically runs Probe before save
+- rights/permission confirmation remains mandatory before local acquisition
+- proven MP3 192 local-acquisition path is preserved
+- yt-dlp update and verbose diagnostics moved behind Developer tools
+- saved local media appears in a WMS-styled mini player on Search Home
+- future `Search / Library / Playlist` navigation shell is visible without pretending Library/Playlist are implemented
+- search is isolated behind a `SearchProvider` abstraction
+- first concrete provider uses the existing WMS Media Worker YouTube search endpoint
+- search results expose title, author, provider and canonical source URL
+- selecting `WMSに追加` passes the result URL into the existing Import Sheet / acquisition flow
+- `元サイト` opens the canonical source URL externally
+- future TikTok / Instagram / Web providers remain disabled until actual search integration exists
 
-Observed successful sample title:
+## Current SearchProvider boundary
 
-`Michael Jackson - Beat It (Official 4K Video)`
+```text
+Search Home
+   |
+SearchViewModel
+   |
+SearchProvider
+   |
+WmsMediaSearchProvider (YouTube first)
+   |
+canonical URL
+   |
+MediaAcquisitionEngine
+```
 
-This establishes the Gate A0 acceptance path:
+Search and acquisition support are deliberately separate. A source must not be described as downloadable merely because it can appear in search results.
 
-`Probe -> Save MP3 -> non-empty local file -> Media3 Play`
+## CI status
 
-## Gate A0 status
+Android CI #28 for implementation head `2a4e90e16d7eb1a847dba513c73ae96e0fd2bba8`:
 
-**PASS**
+- build: PASS
+- unit tests: PASS
+- lint: PASS
+- debug APK artifact: PASS
 
-The previous `SOURCE_FORBIDDEN` failure did not persist after updating the active yt-dlp version to the current stable path. Therefore stale yt-dlp was materially involved in the earlier acquisition failure for the tested sample.
+The prior CI #24 compile failure was corrected by removing the invalid Compose `weight` import/usage and opting into the experimental Material3 bottom-sheet API explicitly.
 
-This result does not prove universal provider support. YouTube/TikTok/Instagram/direct-media support must still be recorded provider-by-provider later.
+## Not yet verified on the real device for Gate A1
 
-## Still not verified
+- Search Home visual layout on the target Android device
+- keyword search returning YouTube results from the WMS Media Worker
+- selecting a search result -> automatic Probe -> Import Sheet
+- complete search-result -> rights confirmation -> MP3 save -> Media3 play path
+- Android share from a browser/YouTube app into the new Import Sheet UI
+- screen rotation / narrow-device layout behavior
 
-Do not describe these as supported yet:
+## Still deferred
 
-- TikTok acquisition
-- Instagram acquisition
-- direct media URL acquisition
-- packaged QuickJS behavior across all providers
-- PO Token provider availability/use
-- background playback
-- persistent Room library
+- persistent search history
+- persistent Room Local Library
 - persistent playlists
+- production bottom navigation
+- foreground acquisition service
+- MediaLibraryService/background playback
+- production skin switching
+- production audio-reactive visualizers
+- TikTok/Instagram/Web search providers
 
 ## Product/security boundaries
 
 - permitted/public or otherwise authorized media only
-- local device acquisition
+- local acquisition remains explicit; search never auto-downloads
+- rights confirmation remains mandatory
 - no account cookies in MVP
 - no proxy rotation
 - no DRM bypass
 - no authentication/access-control bypass
-- no arbitrary yt-dlp options in the user interface
+- no arbitrary yt-dlp flags in normal UI
 
-## Next step
+## Next acceptance event
 
-After latest branch CI passes, merge PR #1 with squash and move to the next Android product gates:
+Install the CI #28 APK on the target Android device and verify:
 
-- Gate A1: share intake hardening
-- Gate A2: managed acquisition job/service
-- Gate A3: persistent Local Library
-- Gate A4: persistent playlists
-- Gate A5: MediaLibraryService/background/screen-off playback
+1. app launches to the WMS Search Home,
+2. WMS emblem and dark/neon visual identity look correct,
+3. search a normal keyword and receive YouTube results,
+4. choose `WMSに追加`,
+5. confirm automatic Probe and Import Sheet,
+6. confirm rights and save MP3,
+7. close sheet and play from the Search Home mini player,
+8. separately share a public URL from another Android app into WMS and confirm the Import Sheet opens prefilled.
 
-Provider matrix expansion remains separate from the fact that Gate A0 feasibility is now proven.
+Keep PR #3 Draft until this real-device Gate A1 flow passes.

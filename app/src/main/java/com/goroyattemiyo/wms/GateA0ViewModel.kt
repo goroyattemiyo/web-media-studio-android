@@ -44,6 +44,7 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
     val uiState = _uiState.asStateFlow()
 
     private var acquireJob: Job? = null
+    private var probeJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -59,6 +60,10 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
                     errorCode = if (result.ready) null else result.code,
                     errorMessage = if (result.ready) null else result.message,
                 )
+            }
+
+            if (result.ready && _uiState.value.url.isNotBlank()) {
+                probe()
             }
         }
     }
@@ -192,19 +197,28 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun onUrlChanged(value: String) {
+        probeJob?.cancel()
+        probeJob = null
+
         _uiState.update {
             it.copy(
                 url = value,
+                probing = false,
                 detectedTitle = null,
                 detectedProvider = null,
+                rightsConfirmed = false,
                 diagnosticSucceeded = null,
                 diagnosticLines = emptyList(),
+                progressPercent = 0f,
+                progressMessage = "",
                 savedPath = null,
                 savedTitle = null,
                 errorCode = null,
                 errorMessage = null,
             )
         }
+
+        probe()
     }
 
     fun consumeSharedText(sharedText: String?) {
@@ -228,6 +242,7 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
         val sourceUrl = snapshot.url.trim()
         if (
             sourceUrl.isBlank() ||
+            !snapshot.engineReady ||
             snapshot.updatingYtdlp ||
             snapshot.diagnosing ||
             snapshot.probing ||
@@ -236,28 +251,35 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
 
-        viewModelScope.launch {
-            _uiState.update {
-                it.copy(
-                    probing = true,
-                    errorCode = null,
-                    errorMessage = null,
-                    detectedTitle = null,
-                    detectedProvider = null,
-                )
-            }
+        _uiState.update {
+            it.copy(
+                probing = true,
+                errorCode = null,
+                errorMessage = null,
+                detectedTitle = null,
+                detectedProvider = null,
+            )
+        }
 
+        probeJob = viewModelScope.launch {
             engine.probe(sourceUrl)
                 .onSuccess { probe ->
-                    _uiState.update {
-                        it.copy(
-                            probing = false,
-                            detectedTitle = probe.title,
-                            detectedProvider = probe.provider,
-                        )
+                    if (_uiState.value.url.trim() == sourceUrl) {
+                        _uiState.update {
+                            it.copy(
+                                probing = false,
+                                detectedTitle = probe.title,
+                                detectedProvider = probe.provider,
+                            )
+                        }
                     }
                 }
-                .onFailure(::showFailure)
+                .onFailure { error ->
+                    if (_uiState.value.url.trim() == sourceUrl) {
+                        showFailure(error)
+                    }
+                }
+            probeJob = null
         }
     }
 
@@ -344,6 +366,8 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     override fun onCleared() {
+        probeJob?.cancel()
+        acquireJob?.cancel()
         engine.cancel()
         super.onCleared()
     }

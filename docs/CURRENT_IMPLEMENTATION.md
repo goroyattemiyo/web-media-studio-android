@@ -45,17 +45,19 @@ Successful active yt-dlp version: `2026.08.19`.
 - proven MP3 192 local-acquisition path is preserved
 - yt-dlp stable is checked automatically at most once per 24 hours after acquisition-engine initialization
 - automatic yt-dlp update failure preserves the existing/bundled version and does not block normal use
+- search waits for yt-dlp update/initialization so local search does not race the updater
 - Developer tools keeps a manual yt-dlp update action only as a force-check/fallback
 - verbose yt-dlp diagnostics remain behind Developer tools
 - saved local media appears in a WMS-styled mini player on Search Home
 - future `Search / Library / Playlist` navigation shell is visible without pretending Library/Playlist are implemented
 - search is isolated behind a `SearchProvider` abstraction
 - Android keyword Search uses on-device yt-dlp `ytsearch`
-- local search parses flat JSON results into title, author, canonical YouTube URL and optional thumbnail
+- local search parses flat JSON results into title, author, canonical YouTube URL, thumbnail and duration
+- Search result cards show actual thumbnails when available and display duration as `m:ss` or `h:mm:ss`
 - selecting `WMSに追加` passes the result URL into the existing Import Sheet / acquisition flow
 - `元サイト` opens the canonical source URL externally
 - the obsolete Cloud Run YouTube search provider has been removed from the Android app source
-- app version was bumped to `0.1.0-a1-local-search` / versionCode `2` to make local-search builds distinguishable from the earlier Worker-backed APK
+- app build was bumped through versionCode `4`; current branch build is `0.1.2-a1-search-lock`
 - future TikTok / Instagram / Web providers remain disabled until actual search integration exists
 
 ## Current SearchProvider boundary
@@ -78,7 +80,7 @@ Search and acquisition support are deliberately separate. A source must not be d
 
 ## CI status
 
-Android CI #50 for the local-search-only APK head `e3242e10ecbe4b8d3520f78352c19db2a958a159`:
+Android CI #61 for head `fd6ca7c4aef29ec46b7af07a8fd1e62932f0550d`:
 
 - build: PASS
 - unit tests: PASS
@@ -113,9 +115,11 @@ Observed result count:
 
 `8`
 
+A later build initially exposed a Python traceback when search raced the automatic yt-dlp update. After serializing local Search behind the yt-dlp update lock, real-device Search passed again. The successful build also displays search-result thumbnails and durations.
+
 This proves:
 
-`Search Home -> local yt-dlp ytsearch -> result list`
+`Search Home -> yt-dlp update/init lock -> local yt-dlp ytsearch -> thumbnail/duration result list`
 
 The remaining Gate A1 acceptance check is the downstream result-action path:
 
@@ -126,10 +130,13 @@ The remaining Gate A1 acceptance check is the downstream result-action path:
 - select one local Search result and open `WMSに追加`
 - confirm automatic Probe in the Import Sheet
 - save MP3 after rights confirmation
-- close the sheet and play the saved item from the Search Home mini player
+- use `閉じて再生`
+- confirm the saved item remains visible under `最近追加したメディア`
+- confirm Media3 playback succeeds from the Search Home mini player
 
 Quality checks that can follow Gate A1 closure:
 
+- correct Search Home top inset so `Find media` does not overlap the Android status bar
 - screen rotation / narrow-device layout behavior
 - observe automatic yt-dlp stable refresh after the 24-hour check window
 
@@ -164,7 +171,8 @@ On the target Android device:
 2. tap `WMSに追加`,
 3. confirm automatic Probe,
 4. confirm rights and save MP3,
-5. close the sheet,
-6. play the saved media from the Search Home mini player.
+5. tap `閉じて再生`,
+6. confirm the saved media remains under `最近追加したメディア`,
+7. confirm playback from the Search Home mini player.
 
 Keep PR #3 Draft until this final Search-result route passes.

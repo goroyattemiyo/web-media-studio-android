@@ -16,28 +16,28 @@ Goal: prove the riskiest assumption before building the full app.
 - [x] real-device Probe for one permitted public YouTube source
 - [x] active yt-dlp version shown in Gate A0 diagnostics
 - [x] explicit stable yt-dlp update action using `updateYoutubeDL(..., STABLE)`
-- [ ] real-device stable yt-dlp update verification
-- [ ] real-device MP3 192 acquisition for one permitted public source
-- [ ] produced file plays through Media3
+- [x] real-device stable yt-dlp update verification
+- [x] real-device MP3 192 acquisition for one permitted public source
+- [x] produced file plays through Media3
 
-Exit criteria: stable-update verification is diagnostic work; Gate A0 itself passes only when a permitted/authorized source completes acquisition and Media3 playback on the target device.
+Exit criteria: satisfied on the target Android device with a permitted/public YouTube sample.
 
-Current retest order:
+Observed passing path:
 
-1. confirm current displayed yt-dlp version
-2. run explicit stable update
-3. retest the exact same public YouTube URL: Probe -> MP3 -> Media3
-4. retest the exact same public TikTok URL: Probe -> MP3 -> Media3
-5. only if current stable yt-dlp reports JS/EJS-specific failure, evaluate Android JavaScript runtime integration
+`Update yt-dlp stable -> Probe -> rights confirmation -> Save MP3 192 -> non-empty local file -> Media3 Play`
+
+Active yt-dlp during the successful run: `2026.08.19`.
+
+**Gate A0: PASS**
 
 Provider test order after basic runtime proof:
 
-1. permitted public YouTube sample
+1. permitted public YouTube sample — feasibility PASS
 2. direct public media URL
 3. public TikTok sample
 4. public Instagram Reel/post accessible without login
 
-One provider success is enough to exit A0; broad provider support remains later work.
+One provider success was enough to exit A0; broad provider support remains later work.
 
 ## Gate A1 — Android share intake
 
@@ -111,13 +111,13 @@ Exit: normal use does not look like a developer diagnostic screen.
 
 For each candidate provider, record probe/acquire/playback results on the target device.
 
-- [ ] YouTube public
+- [x] YouTube public — Gate A0 feasibility sample PASS
 - [ ] TikTok public
 - [ ] Instagram public/no-login-accessible
 - [ ] direct public media URL
 - [ ] additional sources only after explicit testing
 
-Never mark a provider supported based only on yt-dlp extractor presence.
+Never mark a provider broadly supported based only on one sample or extractor presence.
 
 ## Gate A8 — Development distribution
 
@@ -130,17 +130,6 @@ Never mark a provider supported based only on yt-dlp extractor presence.
 
 No Play Store work in the current plan.
 
-## Deferred until core loop is proven
-
-- Chrome extension for desktop handoff
-- Windows native WMS
-- recorder parity with Web/PWA
-- EQ/visualizers
-- rich metadata/artwork editing
-- simultaneous/queued acquisition jobs
-- provider-specific fallback chains
-- cloud extraction as normal Android path
-
 ## Current priority
 
-**Gate A0 only.** Use current stable yt-dlp on the real Android device and prove local source acquisition plus Media3 playback before adding broader product features or JavaScript-runtime work.
+Gate A0 feasibility is proven. After PR #1 is merged, proceed to productizing the local acquisition path, starting with share intake hardening and managed acquisition jobs before persistent Library/Playlist/background playback.

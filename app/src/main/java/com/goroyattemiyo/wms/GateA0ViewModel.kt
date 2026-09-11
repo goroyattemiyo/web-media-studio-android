@@ -19,6 +19,8 @@ data class GateA0UiState(
     val engineReady: Boolean = false,
     val engineCode: String = "STARTING",
     val engineMessage: String = "取得エンジンを準備しています",
+    val ytdlpVersion: String? = null,
+    val updatingYtdlp: Boolean = false,
     val probing: Boolean = false,
     val detectedTitle: String? = null,
     val detectedProvider: String? = null,
@@ -33,6 +35,7 @@ data class GateA0UiState(
 )
 
 class GateA0ViewModel(application: Application) : AndroidViewModel(application) {
+    private val app = application
     private val engine = YoutubeDlAcquisitionEngine(application)
     private val _uiState = MutableStateFlow(GateA0UiState())
     val uiState = _uiState.asStateFlow()
@@ -42,17 +45,14 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
     init {
         viewModelScope.launch {
             val result = engine.initialize()
-            val engineMessage = if (result.ready) {
-                updateYoutubeDlAndDescribe(application)
-            } else {
-                result.message
-            }
+            val version = if (result.ready) readYoutubeDlVersion() else null
 
             _uiState.update {
                 it.copy(
                     engineReady = result.ready,
                     engineCode = result.code,
-                    engineMessage = engineMessage,
+                    engineMessage = result.message,
+                    ytdlpVersion = version,
                     errorCode = if (result.ready) null else result.code,
                     errorMessage = if (result.ready) null else result.message,
                 )
@@ -60,23 +60,93 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    private suspend fun updateYoutubeDlAndDescribe(application: Application): String =
-        withContext(Dispatchers.IO) {
-            val youtubeDl = YoutubeDL.getInstance()
-            val updateSucceeded = runCatching {
-                youtubeDl.updateYoutubeDL(application, YoutubeDL.UpdateChannel.STABLE)
-            }.isSuccess
+    fun updateYoutubeDl() {
+        val snapshot = _uiState.value
+        if (
+            !snapshot.engineReady ||
+            snapshot.updatingYtdlp ||
+            snapshot.probing ||
+            snapshot.acquiring
+        ) {
+            return
+        }
 
-            val version = youtubeDl.version(application)
-                ?: youtubeDl.versionName(application)
-                ?: "組み込み版"
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    updatingYtdlp = true,
+                    engineMessage = "yt-dlp stableを確認しています",
+                    errorCode = null,
+                    errorMessage = null,
+                )
+            }
 
-            if (updateSucceeded) {
-                "取得エンジン準備完了 / yt-dlp $version"
-            } else {
-                "取得エンジン準備完了 / yt-dlp更新確認に失敗。$version で継続"
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val youtubeDl = YoutubeDL.getInstance()
+                    val status = youtubeDl.updateYoutubeDL(app, YoutubeDL.UpdateChannel.STABLE)
+                    val version = youtubeDl.version(app)
+                        ?: youtubeDl.versionName(app)
+                        ?: "不明"
+                    status to version
+                }
+            }
+
+            result.onSuccess { (status, version) ->
+                val message = when (status) {
+                    YoutubeDL.UpdateStatus.DONE -> "yt-dlp stableへ更新しました"
+                    YoutubeDL.UpdateStatus.ALREADY_UP_TO_DATE -> "yt-dlpはstable最新版です"
+                    null -> "yt-dlp stable確認が完了しました"
+                }
+                _uiState.update {
+                    it.copy(
+                        updatingYtdlp = false,
+                        engineMessage = message,
+                        ytdlpVersion = version,
+                    )
+                }
+            }.onFailure { error ->
+                val version = readYoutubeDlVersion()
+                _uiState.update {
+                    it.copy(
+                        updatingYtdlp = false,
+                        engineMessage = "yt-dlp更新に失敗。現在版で継続します",
+                        ytdlpVersion = version,
+                        errorCode = "YTDLP_UPDATE_FAILED",
+                        errorMessage = "yt-dlp stable更新に失敗しました。現在版は保持されています。診断: ${safeUpdateDiagnostic(error)}",
+                    )
+                }
             }
         }
+    }
+
+    private suspend fun readYoutubeDlVersion(): String = withContext(Dispatchers.IO) {
+        val youtubeDl = YoutubeDL.getInstance()
+        youtubeDl.version(app)
+            ?: youtubeDl.versionName(app)
+            ?: "不明"
+    }
+
+    private fun safeUpdateDiagnostic(error: Throwable): String {
+        val raw = buildString {
+            append(error.message.orEmpty())
+            append('\n')
+            append(error.cause?.message.orEmpty())
+        }
+        val compact = raw
+            .lineSequence()
+            .map { it.trim() }
+            .firstOrNull { it.isNotBlank() }
+            .orEmpty()
+
+        return compact
+            .replace(Regex("https?://\\S+", RegexOption.IGNORE_CASE), "[URL]")
+            .replace(Regex("/data/\\S+", RegexOption.IGNORE_CASE), "[APP_PATH]")
+            .replace(Regex("/storage/\\S+", RegexOption.IGNORE_CASE), "[STORAGE_PATH]")
+            .replace(Regex("\\s+"), " ")
+            .take(220)
+            .ifBlank { "詳細なし" }
+    }
 
     fun onUrlChanged(value: String) {
         _uiState.update {
@@ -109,8 +179,16 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun probe() {
-        val sourceUrl = _uiState.value.url.trim()
-        if (sourceUrl.isBlank() || _uiState.value.probing || _uiState.value.acquiring) return
+        val snapshot = _uiState.value
+        val sourceUrl = snapshot.url.trim()
+        if (
+            sourceUrl.isBlank() ||
+            snapshot.updatingYtdlp ||
+            snapshot.probing ||
+            snapshot.acquiring
+        ) {
+            return
+        }
 
         viewModelScope.launch {
             _uiState.update {
@@ -143,6 +221,7 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
             snapshot.url.isBlank() ||
             !snapshot.engineReady ||
             !snapshot.rightsConfirmed ||
+            snapshot.updatingYtdlp ||
             snapshot.acquiring ||
             snapshot.probing
         ) {

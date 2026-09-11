@@ -18,7 +18,7 @@ class WmsMediaSearchProvider(
                 val trimmed = query.trim()
                 require(trimmed.length >= 2) { "2文字以上で検索してください。" }
 
-                val safeMax = maxResults.coerceIn(1, 12)
+                val safeMax = maxResults.coerceIn(1, 8)
                 val encoded = URLEncoder.encode(trimmed, StandardCharsets.UTF_8.toString())
                 val endpoint = "$baseUrl/video/search?q=$encoded&provider=youtube&max_results=$safeMax"
                 val uri = URI(endpoint)
@@ -31,13 +31,27 @@ class WmsMediaSearchProvider(
                     connectTimeout = 8_000
                     readTimeout = 12_000
                     setRequestProperty("Accept", "application/json")
+                    // The WMS Media Worker protects provider search with an allowed-origin check.
+                    // Native Android clients do not send Origin automatically, so identify this
+                    // request as the first-party WMS client explicitly.
+                    setRequestProperty("Origin", WMS_ALLOWED_ORIGIN)
                     useCaches = false
                 }
 
                 try {
                     val status = connection.responseCode
                     if (status !in 200..299) {
-                        throw IllegalStateException("動画検索に失敗しました。コード: SEARCH_HTTP_$status")
+                        val errorBody = connection.errorStream
+                            ?.bufferedReader()
+                            ?.use { it.readText() }
+                            .orEmpty()
+                        val detail = runCatching {
+                            JSONObject(errorBody).optString("detail").trim()
+                        }.getOrDefault("")
+                        val suffix = if (detail.isNotBlank()) " $detail" else ""
+                        throw IllegalStateException(
+                            "動画検索に失敗しました。$suffix コード: SEARCH_HTTP_$status".replace("  ", " "),
+                        )
                     }
 
                     val body = connection.inputStream.bufferedReader().use { it.readText() }
@@ -79,5 +93,6 @@ class WmsMediaSearchProvider(
     private companion object {
         const val DEFAULT_BASE_URL = "https://wms-media-worker-pcdbs5armq-an.a.run.app"
         const val EXPECTED_HOST = "wms-media-worker-pcdbs5armq-an.a.run.app"
+        const val WMS_ALLOWED_ORIGIN = "https://goroyattemiyo.github.io"
     }
 }

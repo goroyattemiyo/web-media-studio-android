@@ -10,7 +10,7 @@ class WmsApplication : Application() {
         super.onCreate()
 
         registerActivityLifecycleCallbacks(
-            object : ActivityLifecycleCallbacks {
+            object : Application.ActivityLifecycleCallbacks {
                 override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
                     applySystemBarInsets(activity)
                 }

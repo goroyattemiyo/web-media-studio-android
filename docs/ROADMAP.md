@@ -70,9 +70,13 @@ Verified entry paths so far:
 
 `Android share sheet -> WMS -> automatic Probe -> rights confirmation -> MP3 save -> mini player -> Media3 playback` — PASS
 
-Known current blocker:
+Search implementation history:
 
-- Android Search requests currently fail against the WMS Media Worker because the worker requires an allowed `Origin` header and the native client did not send one.
+- the first native search implementation targeted the WMS Media Worker,
+- Android initially omitted the worker's required `Origin` header, causing rejection before provider search,
+- after fixing `Origin`, real-device search reached the worker but returned HTTP 503,
+- Cloud Run deployment logs confirmed `YOUTUBE_DATA_API_KEY` is not configured, so the worker intentionally disables YouTube search,
+- Android now defaults to an on-device yt-dlp `ytsearch` provider instead of requiring a Cloud Run/API-key search dependency.
 
 Exit: normal app launch looks like WMS Media Search, shared/pasted URL reliably reaches an automatically probed Import Sheet, and keyword Search works end-to-end on the target device.
 
@@ -190,4 +194,4 @@ Visualizer modes:
 
 ## Current priority
 
-**Gate A1.** Fix native keyword Search against the WMS Media Worker and verify `Search -> result -> WMSに追加 -> Probe -> save -> Mini Player` on the target Android device before moving to Gate A2/A3.
+**Gate A1.** Verify the new on-device yt-dlp keyword Search path end-to-end on the target Android device before moving to Gate A2/A3.

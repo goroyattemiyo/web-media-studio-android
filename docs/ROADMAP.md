@@ -8,16 +8,27 @@ Goal: prove the riskiest assumption before building the full app.
 
 - [x] dedicated Android repository
 - [x] approved architecture and gate plan
-- [~] minimal Kotlin/Compose project bootstrap
-- [~] `MediaAcquisitionEngine` abstraction
-- [~] youtubedl-android + FFmpeg candidate integration
-- [ ] CI debug APK artifact
-- [ ] real-device runtime initialization
-- [ ] real-device Probe for one permitted public source
+- [x] minimal Kotlin/Compose project bootstrap
+- [x] `MediaAcquisitionEngine` abstraction
+- [x] youtubedl-android + FFmpeg candidate integration
+- [x] CI debug APK artifact
+- [x] real-device runtime initialization
+- [x] real-device Probe for one permitted public YouTube source
+- [x] active yt-dlp version shown in Gate A0 diagnostics
+- [x] explicit stable yt-dlp update action using `updateYoutubeDL(..., STABLE)`
+- [ ] real-device stable yt-dlp update verification
 - [ ] real-device MP3 192 acquisition for one permitted public source
 - [ ] produced file plays through Media3
 
-Exit criteria: all final four real-device items PASS.
+Exit criteria: stable-update verification is diagnostic work; Gate A0 itself passes only when a permitted/authorized source completes acquisition and Media3 playback on the target device.
+
+Current retest order:
+
+1. confirm current displayed yt-dlp version
+2. run explicit stable update
+3. retest the exact same public YouTube URL: Probe -> MP3 -> Media3
+4. retest the exact same public TikTok URL: Probe -> MP3 -> Media3
+5. only if current stable yt-dlp reports JS/EJS-specific failure, evaluate Android JavaScript runtime integration
 
 Provider test order after basic runtime proof:
 
@@ -132,4 +143,4 @@ No Play Store work in the current plan.
 
 ## Current priority
 
-**Gate A0 only.** Build the smallest APK that can prove local source acquisition and Media3 playback on a real Android device.
+**Gate A0 only.** Use current stable yt-dlp on the real Android device and prove local source acquisition plus Media3 playback before adding broader product features or JavaScript-runtime work.

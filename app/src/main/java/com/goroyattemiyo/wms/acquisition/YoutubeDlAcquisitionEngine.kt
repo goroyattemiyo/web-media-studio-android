@@ -239,17 +239,40 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
     private fun classifyError(error: Throwable, fallbackCode: String): AcquisitionEngineException {
         if (error is AcquisitionEngineException) return error
 
-        val text = buildString {
+        val rawText = buildString {
             append(error.message.orEmpty())
-            append(' ')
+            append('\n')
             append(error.cause?.message.orEmpty())
-        }.lowercase()
+        }
+        val text = rawText.lowercase()
 
         return when {
-            "unsupported version of python" in text || "python versions 3.10" in text ->
+            "unsupported version of python" in text ||
+                "python versions 3.10" in text ||
+                "requires-python" in text ->
                 AcquisitionEngineException(
                     "PYTHON_RUNTIME_TOO_OLD",
-                    "内蔵Pythonと現在のyt-dlp要件が一致していません。取得エンジンの差し替えが必要です。",
+                    "内蔵Pythonと現在のyt-dlp要件が一致していません。取得エンジンの更新が必要です。",
+                    error,
+                )
+
+            "no supported javascript runtime" in text ||
+                "javascript runtime" in text && "deprecated" in text ||
+                "js challenge" in text ||
+                "jsc" in text && "unavailable" in text ||
+                "nsig extraction failed" in text ||
+                "signature extraction failed" in text ->
+                AcquisitionEngineException(
+                    "JS_RUNTIME_REQUIRED",
+                    "YouTubeの現在の取得方式にはJavaScriptランタイムが必要です。Android取得エンジンへQuickJS等を追加する必要があります。",
+                    error,
+                )
+
+            "yt-dlp-ejs" in text ||
+                "ejs" in text && ("not installed" in text || "missing" in text || "unavailable" in text) ->
+                AcquisitionEngineException(
+                    "EJS_COMPONENT_REQUIRED",
+                    "YouTubeのJavaScriptチャレンジ用EJSコンポーネントが不足しています。取得エンジンへの追加が必要です。",
                     error,
                 )
 
@@ -264,6 +287,29 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
                 AcquisitionEngineException(
                     "DRM_OR_PROTECTED",
                     "保護されたメディアは現在のWMS対象外です。",
+                    error,
+                )
+
+            "requested format is not available" in text ||
+                "only images are available" in text ||
+                "no video formats found" in text ->
+                AcquisitionEngineException(
+                    "FORMAT_UNAVAILABLE",
+                    "このURLでは現在のAndroid取得エンジンが利用可能な音声形式を取得できませんでした。",
+                    error,
+                )
+
+            "http error 403" in text || "forbidden" in text ->
+                AcquisitionEngineException(
+                    "SOURCE_FORBIDDEN",
+                    "配信元から取得が拒否されました。現在の取得方式ではこのメディアを保存できません。",
+                    error,
+                )
+
+            "ffmpeg" in text && ("error" in text || "failed" in text || "not found" in text) ->
+                AcquisitionEngineException(
+                    "FFMPEG_FAILED",
+                    "音声変換処理で失敗しました。Android FFmpeg構成を確認する必要があります。",
                     error,
                 )
 
@@ -290,10 +336,31 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
 
             else -> AcquisitionEngineException(
                 fallbackCode,
-                "取得エンジンで処理できませんでした。コード: $fallbackCode",
+                "取得エンジンで処理できませんでした。診断: ${safeDiagnostic(rawText)}",
                 error,
             )
         }
+    }
+
+    private fun safeDiagnostic(raw: String): String {
+        val compact = raw
+            .lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .firstOrNull { line ->
+                val lower = line.lowercase()
+                "error" in lower || "warning" in lower || "failed" in lower || "unable" in lower
+            }
+            ?: raw.lineSequence().map { it.trim() }.firstOrNull { it.isNotBlank() }.orEmpty()
+
+        if (compact.isBlank()) return "詳細なし"
+
+        return compact
+            .replace(Regex("https?://\\S+", RegexOption.IGNORE_CASE), "[URL]")
+            .replace(Regex("/data/\\S+", RegexOption.IGNORE_CASE), "[APP_PATH]")
+            .replace(Regex("/storage/\\S+", RegexOption.IGNORE_CASE), "[STORAGE_PATH]")
+            .replace(Regex("\\s+"), " ")
+            .take(220)
     }
 
     private companion object {

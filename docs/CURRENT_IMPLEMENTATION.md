@@ -20,6 +20,8 @@ Current target:
 
 **Gate A1 — Search Home + Android share/URL intake productization.**
 
+Gate A1 is still OPEN because keyword Search is failing on the target Android device.
+
 ## Gate A0 baseline already proven
 
 On the target Android device a permitted/public YouTube sample completed:
@@ -48,9 +50,9 @@ Successful active yt-dlp version: `2026.08.19`.
 - saved local media appears in a WMS-styled mini player on Search Home
 - future `Search / Library / Playlist` navigation shell is visible without pretending Library/Playlist are implemented
 - search is isolated behind a `SearchProvider` abstraction
-- first concrete provider uses the existing WMS Media Worker YouTube search endpoint
-- search results expose title, author, provider and canonical source URL
-- selecting `WMSに追加` passes the result URL into the existing Import Sheet / acquisition flow
+- first concrete provider targets the existing WMS Media Worker YouTube search endpoint
+- search results model title, author, provider and canonical source URL
+- selecting `WMSに追加` is designed to pass the result URL into the existing Import Sheet / acquisition flow
 - `元サイト` opens the canonical source URL externally
 - future TikTok / Instagram / Web providers remain disabled until actual search integration exists
 
@@ -83,13 +85,11 @@ Android CI #34 for automatic yt-dlp refresh head `e405eeefe01fccb09847ab46ce2326
 
 Automatic daily yt-dlp stable refresh was added in commit `e405eeefe01fccb09847ab46ce2326fdb7f1686e`. The policy is best-effort and rate-limited to once per 24 hours using app preferences; normal use falls back to the current version if the update check fails.
 
-The prior CI #24 compile failure was corrected by removing the invalid Compose `weight` import/usage and opting into the experimental Material3 bottom-sheet API explicitly.
-
 A later same-URL re-intake bug was fixed in commit `e43e6593cb70d55e38f64378796a340f38ddde87` by moving Probe initiation into the intake path and resetting stale per-URL state.
 
 ## Verified on the real device for Gate A1
 
-### Direct URL intake
+### Direct URL intake — PASS
 
 The following direct-URL intake flow is verified on the target Android device:
 
@@ -106,28 +106,37 @@ Verified sample:
 
 `Michael Jackson - Beat It (Official 4K Video)`
 
-This confirms:
+Confirmed path:
 
 `URL intake -> automatic Probe -> Import Sheet -> rights confirmation -> MP3 save -> Search Home mini player -> Media3 playback`
 
-### Keyword search intake
+### Android share intake — PASS
 
-The Search Home route is also verified on the target Android device:
+The external Android sharing route is verified on the target device:
 
-1. a normal keyword search returns YouTube results,
-2. a result can be selected with `WMSに追加`,
-3. the canonical URL enters the Import Sheet,
-4. automatic Probe succeeds,
-5. rights confirmation and MP3 save succeed,
-6. the saved item plays from the Search Home mini player.
+`YouTube app/browser -> Android share sheet -> WMS -> Import Sheet -> automatic Probe -> rights confirmation -> MP3 save -> Search Home mini player -> Media3 playback`
 
-This confirms:
+### Keyword Search — FAIL / OPEN
 
-`keyword search -> YouTube result -> WMSに追加 -> automatic Probe -> rights confirmation -> MP3 save -> mini player -> Media3 playback`
+Keyword Search is not yet verified and currently fails on the target Android device.
 
-## Still to verify on the real device before closing Gate A1
+Root cause found in code review:
 
-- Android share from a browser/YouTube app into the new Import Sheet UI
+- the WMS Media Worker requires an allowed `Origin` header for `/video/providers` and `/video/search`,
+- the Web/PWA receives that header naturally from the browser,
+- the Android `HttpURLConnection` search client did not set it,
+- therefore native Search can be rejected before provider search runs.
+
+The Android provider must be corrected and then re-tested end-to-end.
+
+## Still to verify before closing Gate A1
+
+- keyword search returns YouTube results on the target Android device
+- selecting a result -> `WMSに追加` -> automatic Probe -> Import Sheet
+- complete search-result -> rights confirmation -> MP3 save -> Search Home mini-player playback
+
+Quality checks that can follow Gate A1 closure:
+
 - screen rotation / narrow-device layout behavior
 - automatic yt-dlp refresh behavior on-device after the 24-hour check window
 
@@ -156,12 +165,14 @@ This confirms:
 
 ## Next acceptance event
 
-Using the current Gate A1 APK on the target Android device, share a permitted/public YouTube URL from another Android app into WMS and verify:
+Fix native Search request compatibility with the WMS Media Worker, then verify on the target Android device:
 
-1. WMS appears in the Android share sheet,
-2. the shared URL opens the Import Sheet,
-3. automatic Probe succeeds,
-4. rights confirmation and MP3 save succeed,
-5. closing the sheet returns to Search Home and the saved item plays in the mini player.
+1. app launches to Search Home,
+2. enter a normal keyword,
+3. receive YouTube search results,
+4. choose `WMSに追加`,
+5. automatic Probe succeeds,
+6. confirm rights and save MP3,
+7. close the sheet and play from the Search Home mini player.
 
-Keep PR #3 Draft until this remaining share-intake route passes on the real Android device.
+Keep PR #3 Draft until this Search route passes.

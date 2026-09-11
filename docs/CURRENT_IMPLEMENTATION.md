@@ -1,6 +1,6 @@
 # Current Implementation
 
-Last updated: 2026-09-11 JST
+Last updated: 2026-09-12 JST
 
 ## Repository state
 
@@ -41,7 +41,10 @@ Successful active yt-dlp version: `2026.08.19`.
 - changing/reimporting a URL resets rights confirmation to OFF
 - rights/permission confirmation remains mandatory before local acquisition
 - proven MP3 192 local-acquisition path is preserved
-- yt-dlp update and verbose diagnostics moved behind Developer tools
+- yt-dlp stable is checked automatically at most once per 24 hours after acquisition-engine initialization
+- automatic yt-dlp update failure preserves the existing/bundled version and does not block normal use
+- Developer tools keeps a manual yt-dlp update action only as a force-check/fallback
+- verbose yt-dlp diagnostics remain behind Developer tools
 - saved local media appears in a WMS-styled mini player on Search Home
 - future `Search / Library / Playlist` navigation shell is visible without pretending Library/Playlist are implemented
 - search is isolated behind a `SearchProvider` abstraction
@@ -71,12 +74,14 @@ Search and acquisition support are deliberately separate. A source must not be d
 
 ## CI status
 
-Android CI #28 for implementation head `2a4e90e16d7eb1a847dba513c73ae96e0fd2bba8`:
+Android CI #33 for icon-restoration head `561ee4dc0fc4606508fd66d657d706d7377b03d2`:
 
 - build: PASS
 - unit tests: PASS
 - lint: PASS
 - debug APK artifact: PASS
+
+Automatic daily yt-dlp stable refresh was added in commit `e405eeefe01fccb09847ab46ce2326fdb7f1686e`. The policy is best-effort and rate-limited to once per 24 hours using app preferences; normal use falls back to the current version if the update check fails.
 
 The prior CI #24 compile failure was corrected by removing the invalid Compose `weight` import/usage and opting into the experimental Material3 bottom-sheet API explicitly.
 
@@ -111,6 +116,7 @@ This confirms the fixed path:
 - complete search-result -> rights confirmation -> MP3 save -> Search Home mini-player playback
 - Android share from a browser/YouTube app into the new Import Sheet UI
 - screen rotation / narrow-device layout behavior
+- automatic yt-dlp refresh behavior on-device after the 24-hour check window
 
 ## Still deferred
 

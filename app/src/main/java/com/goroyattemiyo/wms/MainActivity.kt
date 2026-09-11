@@ -100,7 +100,10 @@ private fun GateA0Screen(viewModel: GateA0ViewModel) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            EngineStatusCard(state)
+            EngineStatusCard(
+                state = state,
+                onUpdateYoutubeDl = viewModel::updateYoutubeDl,
+            )
 
             OutlinedTextField(
                 value = state.url,
@@ -110,7 +113,7 @@ private fun GateA0Screen(viewModel: GateA0ViewModel) {
                 placeholder = { Text("https://...") },
                 singleLine = false,
                 minLines = 2,
-                enabled = !state.acquiring,
+                enabled = !state.acquiring && !state.updatingYtdlp,
             )
 
             Row(
@@ -118,7 +121,11 @@ private fun GateA0Screen(viewModel: GateA0ViewModel) {
             ) {
                 OutlinedButton(
                     onClick = viewModel::probe,
-                    enabled = state.url.isNotBlank() && state.engineReady && !state.probing && !state.acquiring,
+                    enabled = state.url.isNotBlank() &&
+                        state.engineReady &&
+                        !state.updatingYtdlp &&
+                        !state.probing &&
+                        !state.acquiring,
                 ) {
                     Text(if (state.probing) "確認中…" else "Probe")
                 }
@@ -155,7 +162,7 @@ private fun GateA0Screen(viewModel: GateA0ViewModel) {
                 Checkbox(
                     checked = state.rightsConfirmed,
                     onCheckedChange = viewModel::setRightsConfirmed,
-                    enabled = !state.acquiring,
+                    enabled = !state.acquiring && !state.updatingYtdlp,
                 )
                 Text(
                     text = "このメディアを保存する権利・許可を確認しました",
@@ -169,6 +176,7 @@ private fun GateA0Screen(viewModel: GateA0ViewModel) {
                 enabled = state.url.isNotBlank() &&
                     state.engineReady &&
                     state.rightsConfirmed &&
+                    !state.updatingYtdlp &&
                     !state.probing &&
                     !state.acquiring,
             ) {
@@ -223,11 +231,14 @@ private fun GateA0Screen(viewModel: GateA0ViewModel) {
 }
 
 @Composable
-private fun EngineStatusCard(state: GateA0UiState) {
+private fun EngineStatusCard(
+    state: GateA0UiState,
+    onUpdateYoutubeDl: () -> Unit,
+) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text("Acquisition Engine", fontWeight = FontWeight.Bold)
             Text(
@@ -238,6 +249,19 @@ private fun EngineStatusCard(state: GateA0UiState) {
                 text = state.engineMessage,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Text(
+                text = "yt-dlp: ${state.ytdlpVersion ?: "確認中"}",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedButton(
+                onClick = onUpdateYoutubeDl,
+                enabled = state.engineReady &&
+                    !state.updatingYtdlp &&
+                    !state.probing &&
+                    !state.acquiring,
+            ) {
+                Text(if (state.updatingYtdlp) "Updating yt-dlp…" else "Update yt-dlp stable")
+            }
         }
     }
 }

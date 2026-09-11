@@ -12,8 +12,8 @@ android {
         applicationId = "com.goroyattemiyo.wms"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.1.1-a1-media-cards"
+        versionCode = 4
+        versionName = "0.1.2-a1-search-lock"
 
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")

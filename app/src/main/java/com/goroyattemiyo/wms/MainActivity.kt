@@ -113,7 +113,7 @@ private fun GateA0Screen(viewModel: GateA0ViewModel) {
                 placeholder = { Text("https://...") },
                 singleLine = false,
                 minLines = 2,
-                enabled = !state.acquiring && !state.updatingYtdlp,
+                enabled = !state.acquiring && !state.updatingYtdlp && !state.diagnosing,
             )
 
             Row(
@@ -124,15 +124,53 @@ private fun GateA0Screen(viewModel: GateA0ViewModel) {
                     enabled = state.url.isNotBlank() &&
                         state.engineReady &&
                         !state.updatingYtdlp &&
+                        !state.diagnosing &&
                         !state.probing &&
                         !state.acquiring,
                 ) {
                     Text(if (state.probing) "確認中…" else "Probe")
                 }
 
+                OutlinedButton(
+                    onClick = viewModel::runDiagnostics,
+                    enabled = state.url.isNotBlank() &&
+                        state.engineReady &&
+                        !state.updatingYtdlp &&
+                        !state.diagnosing &&
+                        !state.probing &&
+                        !state.acquiring,
+                ) {
+                    Text(if (state.diagnosing) "Diagnosing…" else "yt-dlp Diagnostics")
+                }
+
                 if (state.acquiring) {
                     OutlinedButton(onClick = viewModel::cancelAcquisition) {
                         Text("Cancel")
+                    }
+                }
+            }
+
+            if (state.diagnosticLines.isNotEmpty()) {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text("yt-dlp diagnostics", fontWeight = FontWeight.Bold)
+                        Text(
+                            text = if (state.diagnosticSucceeded == true) {
+                                "SIMULATE PASS"
+                            } else {
+                                "SIMULATE returned diagnostics"
+                            },
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        state.diagnosticLines.forEach { line ->
+                            Text(
+                                text = line,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
                     }
                 }
             }
@@ -162,7 +200,7 @@ private fun GateA0Screen(viewModel: GateA0ViewModel) {
                 Checkbox(
                     checked = state.rightsConfirmed,
                     onCheckedChange = viewModel::setRightsConfirmed,
-                    enabled = !state.acquiring && !state.updatingYtdlp,
+                    enabled = !state.acquiring && !state.updatingYtdlp && !state.diagnosing,
                 )
                 Text(
                     text = "このメディアを保存する権利・許可を確認しました",
@@ -177,6 +215,7 @@ private fun GateA0Screen(viewModel: GateA0ViewModel) {
                     state.engineReady &&
                     state.rightsConfirmed &&
                     !state.updatingYtdlp &&
+                    !state.diagnosing &&
                     !state.probing &&
                     !state.acquiring,
             ) {
@@ -257,6 +296,7 @@ private fun EngineStatusCard(
                 onClick = onUpdateYoutubeDl,
                 enabled = state.engineReady &&
                     !state.updatingYtdlp &&
+                    !state.diagnosing &&
                     !state.probing &&
                     !state.acquiring,
             ) {

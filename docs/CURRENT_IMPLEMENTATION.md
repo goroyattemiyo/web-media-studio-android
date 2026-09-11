@@ -36,6 +36,9 @@ Successful active yt-dlp version: `2026.08.19`.
 - direct URL bypasses keyword search and opens the Import Sheet
 - Android `ACTION_SEND text/plain` shared URL opens the same Import Sheet path
 - shared/manual URL automatically runs Probe before save
+- repeated intake of the same URL now forces a fresh Probe instead of relying on URL-keyed Compose side effects
+- stale Probe completions are prevented from overwriting the current intake state
+- changing/reimporting a URL resets rights confirmation to OFF
 - rights/permission confirmation remains mandatory before local acquisition
 - proven MP3 192 local-acquisition path is preserved
 - yt-dlp update and verbose diagnostics moved behind Developer tools
@@ -77,12 +80,33 @@ Android CI #28 for implementation head `2a4e90e16d7eb1a847dba513c73ae96e0fd2bba8
 
 The prior CI #24 compile failure was corrected by removing the invalid Compose `weight` import/usage and opting into the experimental Material3 bottom-sheet API explicitly.
 
-## Not yet verified on the real device for Gate A1
+A later same-URL re-intake bug was fixed in commit `e43e6593cb70d55e38f64378796a340f38ddde87` by moving Probe initiation into the intake path and resetting stale per-URL state.
+
+## Verified on the real device for Gate A1
+
+The following direct-URL intake flow is now verified on the target Android device:
+
+1. a YouTube URL is accepted by the Gate A1 Import Sheet,
+2. Probe succeeds,
+3. title/provider are displayed under `取得候補`,
+4. rights confirmation can be enabled,
+5. MP3 save completes successfully,
+6. the sheet displays `保存完了` with the saved title.
+
+Verified sample:
+
+`Michael Jackson - Beat It (Official 4K Video)`
+
+This confirms the fixed path:
+
+`URL intake -> automatic Probe -> Import Sheet -> rights confirmation -> MP3 save -> saved state`
+
+## Still to verify on the real device before closing Gate A1
 
 - Search Home visual layout on the target Android device
 - keyword search returning YouTube results from the WMS Media Worker
 - selecting a search result -> automatic Probe -> Import Sheet
-- complete search-result -> rights confirmation -> MP3 save -> Media3 play path
+- complete search-result -> rights confirmation -> MP3 save -> Search Home mini-player playback
 - Android share from a browser/YouTube app into the new Import Sheet UI
 - screen rotation / narrow-device layout behavior
 
@@ -111,15 +135,14 @@ The prior CI #24 compile failure was corrected by removing the invalid Compose `
 
 ## Next acceptance event
 
-Install the CI #28 APK on the target Android device and verify:
+Using the current Gate A1 APK on the target Android device, verify:
 
 1. app launches to the WMS Search Home,
-2. WMS emblem and dark/neon visual identity look correct,
-3. search a normal keyword and receive YouTube results,
-4. choose `WMSに追加`,
-5. confirm automatic Probe and Import Sheet,
-6. confirm rights and save MP3,
-7. close sheet and play from the Search Home mini player,
-8. separately share a public URL from another Android app into WMS and confirm the Import Sheet opens prefilled.
+2. search a normal keyword and receive YouTube results,
+3. choose `WMSに追加`,
+4. confirm automatic Probe and Import Sheet,
+5. confirm rights and save MP3,
+6. close the sheet and play from the Search Home mini player,
+7. separately share a public URL from another Android app into WMS and confirm the Import Sheet opens and saves successfully.
 
-Keep PR #3 Draft until this real-device Gate A1 flow passes.
+Keep PR #3 Draft until this remaining real-device Gate A1 flow passes.

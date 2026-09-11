@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -109,12 +110,13 @@ private fun WmsRoot(viewModel: GateA0ViewModel) {
         },
         onSubmit = {
             val value = searchText.trim()
-            if (value.isBlank()) return@SearchHome
-            if (URL_PATTERN.matches(value)) {
-                viewModel.onUrlChanged(value)
-                importOpen = true
-            } else {
-                searchNotice = "キーワード検索は次の実装でYouTube Providerから接続します。"
+            if (value.isNotBlank()) {
+                if (URL_PATTERN.matches(value)) {
+                    viewModel.onUrlChanged(value)
+                    importOpen = true
+                } else {
+                    searchNotice = "キーワード検索は次の実装でYouTube Providerから接続します。"
+                }
             }
         },
         searchNotice = searchNotice,

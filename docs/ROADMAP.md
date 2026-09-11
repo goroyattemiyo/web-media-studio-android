@@ -1,6 +1,6 @@
 # WMS Android Roadmap
 
-Last updated: 2026-09-11 JST
+Last updated: 2026-09-12 JST
 
 UI/UX source of truth:
 
@@ -47,22 +47,37 @@ One provider success was enough to exit A0; broad provider support remains later
 
 Goal: replace the Gate A0 developer-first screen with the first native WMS product shell while hardening Android share intake.
 
-- [ ] app launches on **Search Home** by default
-- [ ] approved WMS neon-diamond emblem is used as Android visual identity
-- [ ] primary field accepts both search text and pasted HTTP(S) URL
-- [ ] provider-neutral `SearchProvider` boundary exists; UI is not hard-coded around YouTube
-- [ ] keyword-search provider implementation can be added incrementally without changing screen structure
-- [ ] `ACTION_SEND text/plain` from browser/app
-- [ ] first HTTP(S) URL extraction
-- [ ] reject credential-bearing/malformed URLs
-- [ ] shared valid URL bypasses Search Home and opens Import Sheet prefilled
-- [ ] pasted URL opens the same Import Sheet path
-- [ ] Import Sheet performs automatic Probe; normal UI has no Probe button
-- [ ] rights/permission confirmation remains explicit before save
-- [ ] existing Gate A0 MP3 acquisition path remains usable through Import Sheet
-- [ ] Gate A0 yt-dlp controls move to `Developer Tools`
+- [x] app launches on **Search Home** by default
+- [x] approved WMS neon-diamond emblem is used as Android visual identity
+- [x] primary field accepts both search text and pasted HTTP(S) URL
+- [x] provider-neutral `SearchProvider` boundary exists; UI is not hard-coded around YouTube
+- [x] keyword-search provider implementation can be added incrementally without changing screen structure
+- [x] `ACTION_SEND text/plain` from browser/app
+- [x] first HTTP(S) URL extraction
+- [x] reject credential-bearing/malformed URLs
+- [x] shared valid URL bypasses Search Home and opens Import Sheet prefilled
+- [x] pasted URL opens the same Import Sheet path
+- [x] Import Sheet performs automatic Probe; normal UI has no Probe button
+- [x] rights/permission confirmation remains explicit before save
+- [x] existing Gate A0 MP3 acquisition path remains usable through Import Sheet
+- [x] Gate A0 yt-dlp controls move to `Developer Tools`
 
-Exit: normal app launch looks like WMS Media Search, while a shared/pasted URL reliably reaches an automatically probed Import Sheet and can still complete the proven local-save path.
+Exit: satisfied on the target Android device.
+
+Verified entry paths:
+
+`keyword search -> YouTube result -> WMSに追加 -> automatic Probe -> rights confirmation -> MP3 save -> mini player -> Media3 playback`
+
+`direct/pasted URL -> automatic Probe -> rights confirmation -> MP3 save -> mini player -> Media3 playback`
+
+`Android share sheet -> WMS -> automatic Probe -> rights confirmation -> MP3 save -> mini player -> Media3 playback`
+
+**Gate A1: PASS**
+
+Follow-up quality checks that do not block Gate A1 closure:
+
+- narrow-device / screen-rotation layout polish
+- observe automatic yt-dlp stable refresh after the 24-hour check window
 
 ## Gate A2 — Managed acquisition jobs
 
@@ -171,4 +186,4 @@ Visualizer modes:
 
 ## Current priority
 
-**Gate A1.** Build the native Search Home / Import Sheet shell first, while preserving the proven Gate A0 acquisition path. Keyword provider search can be wired incrementally behind the provider-neutral search boundary. Do not jump straight to Library/Playlist implementation before the intake shell is stable.
+**Gate A2.** Move acquisition work out of the Activity into a managed foreground job while preserving the proven Gate A1 Search/Share/Import flow. Gate A3 then turns completed acquisitions into a persistent Local Library.

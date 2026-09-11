@@ -19,7 +19,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DarkColorScheme
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -205,9 +204,10 @@ private fun GateA0Screen(viewModel: GateA0ViewModel) {
                 }
             }
 
-            if (state.savedPath != null) {
+            val savedPath = state.savedPath
+            if (savedPath != null) {
                 LocalPreviewCard(
-                    path = state.savedPath,
+                    path = savedPath,
                     title = state.savedTitle ?: "保存済み音声",
                 )
             }
@@ -295,7 +295,7 @@ private fun LocalPreviewCard(path: String, title: String) {
     }
 }
 
-private val WmsDarkColors: DarkColorScheme = darkColorScheme(
+private val WmsDarkColors = darkColorScheme(
     primary = Color(0xFFF4F4F4),
     onPrimary = Color(0xFF111111),
     background = Color(0xFF0B0D0F),

@@ -74,7 +74,7 @@ Search and acquisition support are deliberately separate. A source must not be d
 
 ## CI status
 
-Android CI #33 for icon-restoration head `561ee4dc0fc4606508fd66d657d706d7377b03d2`:
+Android CI #34 for automatic yt-dlp refresh head `e405eeefe01fccb09847ab46ce2326fdb7f1686e`:
 
 - build: PASS
 - unit tests: PASS
@@ -89,7 +89,9 @@ A later same-URL re-intake bug was fixed in commit `e43e6593cb70d55e38f64378796a
 
 ## Verified on the real device for Gate A1
 
-The following direct-URL intake flow is now verified on the target Android device:
+### Direct URL intake
+
+The following direct-URL intake flow is verified on the target Android device:
 
 1. a YouTube URL is accepted by the Gate A1 Import Sheet,
 2. Probe succeeds,
@@ -104,16 +106,27 @@ Verified sample:
 
 `Michael Jackson - Beat It (Official 4K Video)`
 
-This confirms the fixed path:
+This confirms:
 
 `URL intake -> automatic Probe -> Import Sheet -> rights confirmation -> MP3 save -> Search Home mini player -> Media3 playback`
 
+### Keyword search intake
+
+The Search Home route is also verified on the target Android device:
+
+1. a normal keyword search returns YouTube results,
+2. a result can be selected with `WMSに追加`,
+3. the canonical URL enters the Import Sheet,
+4. automatic Probe succeeds,
+5. rights confirmation and MP3 save succeed,
+6. the saved item plays from the Search Home mini player.
+
+This confirms:
+
+`keyword search -> YouTube result -> WMSに追加 -> automatic Probe -> rights confirmation -> MP3 save -> mini player -> Media3 playback`
+
 ## Still to verify on the real device before closing Gate A1
 
-- Search Home visual layout on the target Android device
-- keyword search returning YouTube results from the WMS Media Worker
-- selecting a search result -> automatic Probe -> Import Sheet
-- complete search-result -> rights confirmation -> MP3 save -> Search Home mini-player playback
 - Android share from a browser/YouTube app into the new Import Sheet UI
 - screen rotation / narrow-device layout behavior
 - automatic yt-dlp refresh behavior on-device after the 24-hour check window
@@ -143,14 +156,12 @@ This confirms the fixed path:
 
 ## Next acceptance event
 
-Using the current Gate A1 APK on the target Android device, verify:
+Using the current Gate A1 APK on the target Android device, share a permitted/public YouTube URL from another Android app into WMS and verify:
 
-1. app launches to the WMS Search Home,
-2. search a normal keyword and receive YouTube results,
-3. choose `WMSに追加`,
-4. confirm automatic Probe and Import Sheet,
-5. confirm rights and save MP3,
-6. close the sheet and play from the Search Home mini player,
-7. separately share a public URL from another Android app into WMS and confirm the Import Sheet opens and saves successfully.
+1. WMS appears in the Android share sheet,
+2. the shared URL opens the Import Sheet,
+3. automatic Probe succeeds,
+4. rights confirmation and MP3 save succeed,
+5. closing the sheet returns to Search Home and the saved item plays in the mini player.
 
-Keep PR #3 Draft until this remaining real-device Gate A1 flow passes.
+Keep PR #3 Draft until this remaining share-intake route passes on the real Android device.

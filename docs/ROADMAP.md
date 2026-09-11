@@ -18,40 +18,25 @@ Goal: prove the riskiest assumption before building the full app.
 - [x] CI debug APK artifact
 - [x] real-device runtime initialization
 - [x] real-device Probe for one permitted public YouTube source
-- [x] active yt-dlp version shown in Gate A0 diagnostics
-- [x] explicit stable yt-dlp update action using `updateYoutubeDL(..., STABLE)`
-- [x] real-device stable yt-dlp update verification
-- [x] real-device MP3 192 acquisition for one permitted public source
+- [x] active yt-dlp version shown in diagnostics
+- [x] stable yt-dlp update path
+- [x] real-device MP3 192 acquisition
 - [x] produced file plays through Media3
 
-Exit criteria: satisfied on the target Android device with a permitted/public YouTube sample.
-
-Observed passing path:
-
-`Update yt-dlp stable -> Probe -> rights confirmation -> Save MP3 192 -> non-empty local file -> Media3 Play`
-
-Active yt-dlp during the successful run: `2026.08.19`.
+Exit criteria: satisfied on the target Android device.
 
 **Gate A0: PASS**
 
-Provider test order after basic runtime proof:
-
-1. permitted public YouTube sample — feasibility PASS
-2. direct public media URL
-3. public TikTok sample
-4. public Instagram Reel/post accessible without login
-
-One provider success was enough to exit A0; broad provider support remains later work.
-
 ## Gate A1 — Search Home + Android intake shell
 
-Goal: replace the Gate A0 developer-first screen with the first native WMS product shell while hardening Android share intake.
+Goal: replace the Gate A0 developer-first screen with the first native WMS product shell while hardening Android share/search intake.
 
 - [x] app launches on **Search Home** by default
 - [x] approved WMS neon-diamond emblem is used as Android visual identity
 - [x] primary field accepts both search text and pasted HTTP(S) URL
-- [x] provider-neutral `SearchProvider` boundary exists; UI is not hard-coded around YouTube
-- [x] keyword-search provider implementation can be added incrementally without changing screen structure
+- [x] provider-neutral `SearchProvider` boundary exists
+- [x] Android keyword Search uses on-device yt-dlp `ytsearch`
+- [x] result cards show title / author / thumbnail / duration / canonical source URL
 - [x] `ACTION_SEND text/plain` from browser/app
 - [x] first HTTP(S) URL extraction
 - [x] reject credential-bearing/malformed URLs
@@ -60,32 +45,35 @@ Goal: replace the Gate A0 developer-first screen with the first native WMS produ
 - [x] Import Sheet performs automatic Probe; normal UI has no Probe button
 - [x] rights/permission confirmation remains explicit before save
 - [x] existing Gate A0 MP3 acquisition path remains usable through Import Sheet
-- [x] Gate A0 yt-dlp controls move to `Developer Tools`
-- [ ] keyword search returns working YouTube results on the target Android device
-- [ ] search result -> `WMSに追加` -> Probe -> save -> Mini Player passes on the target Android device
-
-Verified entry paths so far:
-
-`direct/pasted URL -> automatic Probe -> rights confirmation -> MP3 save -> mini player -> Media3 playback` — PASS
-
-`Android share sheet -> WMS -> automatic Probe -> rights confirmation -> MP3 save -> mini player -> Media3 playback` — PASS
+- [x] yt-dlp stable auto-check is rate-limited and best-effort
+- [x] local Search is serialized behind yt-dlp update/init to avoid runtime races
+- [x] Gate A0 yt-dlp controls moved to `Developer Tools`
+- [x] direct/pasted URL -> Probe -> save -> Mini Player -> playback passes on the target device
+- [x] Android share sheet -> WMS -> Probe -> save -> Mini Player -> playback passes on the target device
+- [x] keyword Search returns working YouTube results on the target device
+- [x] Search result -> `WMSに追加` -> Probe -> save -> `閉じて再生` -> Mini Player passes on the target device
+- [x] long-form media is not rejected solely by a fixed duration threshold
+- [x] storage exhaustion is handled as a user-facing capacity error
 
 Search implementation history:
 
-- the first native search implementation targeted the WMS Media Worker,
-- Android initially omitted the worker's required `Origin` header, causing rejection before provider search,
-- after fixing `Origin`, real-device search reached the worker but returned HTTP 503,
-- Cloud Run deployment logs confirmed `YOUTUBE_DATA_API_KEY` is not configured, so the worker intentionally disables YouTube search,
-- Android now defaults to an on-device yt-dlp `ytsearch` provider instead of requiring a Cloud Run/API-key search dependency.
+- the first native Search implementation targeted the WMS Media Worker,
+- Android initially omitted the worker's required `Origin` header,
+- after fixing `Origin`, the Worker returned HTTP 503 because `YOUTUBE_DATA_API_KEY` was not configured,
+- Android therefore moved Search to an on-device yt-dlp `ytsearch` provider,
+- a later real-device Python traceback exposed a race between automatic yt-dlp update and Search,
+- Search/update serialization fixed the race and the final path passed on-device.
 
-Exit: normal app launch looks like WMS Media Search, shared/pasted URL reliably reaches an automatically probed Import Sheet, and keyword Search works end-to-end on the target device.
+Exit: normal launch looks like WMS Media Search, shared/pasted URL reliably reaches an automatically probed Import Sheet, and keyword Search works end-to-end through local save and playback.
 
-**Gate A1: OPEN**
+**Gate A1: PASS — verified on the target Android device on 2026-09-12 JST**
 
-Follow-up quality checks that do not block Gate A1 closure:
+Non-blocking post-Gate-A1 quality items:
 
+- fix Search Home top inset so `Find media` does not overlap the Android status bar
 - narrow-device / screen-rotation layout polish
 - observe automatic yt-dlp stable refresh after the 24-hour check window
+- continue adaptive icon visual parity work if needed
 
 ## Gate A2 — Managed acquisition jobs
 
@@ -161,13 +149,13 @@ Exit: normal use looks and feels like native WMS rather than a developer diagnos
 
 For each candidate provider, record search/probe/acquire/playback results on the target device where applicable.
 
-- [x] YouTube public — Gate A0 feasibility sample PASS
-- [ ] direct public media URL
+- [x] YouTube public — Gate A0/Gate A1 verified path
+- [ ] direct public media URL provider-specific matrix entry
 - [ ] TikTok public
 - [ ] Instagram public/no-login-accessible
 - [ ] additional sources only after explicit testing
 
-Search support and acquisition support are separate capabilities. Never mark a provider supported merely because yt-dlp has an extractor or a search UI entry exists.
+Search support and acquisition support are separate capabilities. Never mark a provider supported merely because yt-dlp has an extractor or a Search UI entry exists.
 
 ## Gate A8 — Development distribution
 
@@ -194,4 +182,4 @@ Visualizer modes:
 
 ## Current priority
 
-**Gate A1.** Verify the new on-device yt-dlp keyword Search path end-to-end on the target Android device before moving to Gate A2/A3.
+**Close PR #3 and merge Gate A1 to `main`.** After merge, start Gate A2 from `main`. Persistent Local Library remains Gate A3, with the top-inset visual bug tracked as a small non-blocking quality fix.

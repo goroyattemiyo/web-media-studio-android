@@ -1,0 +1,354 @@
+package com.goroyattemiyo.wms
+
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.goroyattemiyo.wms.acquisition.AcquisitionEngineException
+import com.goroyattemiyo.wms.acquisition.YoutubeDlAcquisitionEngine
+import com.yausername.youtubedl_android.YoutubeDL
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+data class GateA0UiState(
+    val url: String = "",
+    val engineReady: Boolean = false,
+    val engineCode: String = "STARTING",
+    val engineMessage: String = "取得エンジンを準備しています",
+    val ytdlpVersion: String? = null,
+    val updatingYtdlp: Boolean = false,
+    val diagnosing: Boolean = false,
+    val diagnosticSucceeded: Boolean? = null,
+    val diagnosticLines: List<String> = emptyList(),
+    val probing: Boolean = false,
+    val detectedTitle: String? = null,
+    val detectedProvider: String? = null,
+    val rightsConfirmed: Boolean = false,
+    val acquiring: Boolean = false,
+    val progressPercent: Float = 0f,
+    val progressMessage: String = "",
+    val savedPath: String? = null,
+    val savedTitle: String? = null,
+    val errorCode: String? = null,
+    val errorMessage: String? = null,
+)
+
+class GateA0ViewModel(application: Application) : AndroidViewModel(application) {
+    private val app = application
+    private val engine = YoutubeDlAcquisitionEngine(application)
+    private val _uiState = MutableStateFlow(GateA0UiState())
+    val uiState = _uiState.asStateFlow()
+
+    private var acquireJob: Job? = null
+
+    init {
+        viewModelScope.launch {
+            val result = engine.initialize()
+            val version = if (result.ready) readYoutubeDlVersion() else null
+
+            _uiState.update {
+                it.copy(
+                    engineReady = result.ready,
+                    engineCode = result.code,
+                    engineMessage = result.message,
+                    ytdlpVersion = version,
+                    errorCode = if (result.ready) null else result.code,
+                    errorMessage = if (result.ready) null else result.message,
+                )
+            }
+        }
+    }
+
+    fun updateYoutubeDl() {
+        val snapshot = _uiState.value
+        if (
+            !snapshot.engineReady ||
+            snapshot.updatingYtdlp ||
+            snapshot.diagnosing ||
+            snapshot.probing ||
+            snapshot.acquiring
+        ) {
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    updatingYtdlp = true,
+                    engineMessage = "yt-dlp stableを確認しています",
+                    errorCode = null,
+                    errorMessage = null,
+                )
+            }
+
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val youtubeDl = YoutubeDL.getInstance()
+                    val status = youtubeDl.updateYoutubeDL(app, YoutubeDL.UpdateChannel.STABLE)
+                    val version = youtubeDl.version(app)
+                        ?: youtubeDl.versionName(app)
+                        ?: "不明"
+                    status to version
+                }
+            }
+
+            result.onSuccess { (status, version) ->
+                val message = when (status) {
+                    YoutubeDL.UpdateStatus.DONE -> "yt-dlp stableへ更新しました"
+                    YoutubeDL.UpdateStatus.ALREADY_UP_TO_DATE -> "yt-dlpはstable最新版です"
+                    null -> "yt-dlp stable確認が完了しました"
+                }
+                _uiState.update {
+                    it.copy(
+                        updatingYtdlp = false,
+                        engineMessage = message,
+                        ytdlpVersion = version,
+                    )
+                }
+            }.onFailure { error ->
+                val version = readYoutubeDlVersion()
+                _uiState.update {
+                    it.copy(
+                        updatingYtdlp = false,
+                        engineMessage = "yt-dlp更新に失敗。現在版で継続します",
+                        ytdlpVersion = version,
+                        errorCode = "YTDLP_UPDATE_FAILED",
+                        errorMessage = "yt-dlp stable更新に失敗しました。現在版は保持されています。診断: ${safeUpdateDiagnostic(error)}",
+                    )
+                }
+            }
+        }
+    }
+
+    fun runDiagnostics() {
+        val snapshot = _uiState.value
+        val sourceUrl = snapshot.url.trim()
+        if (
+            sourceUrl.isBlank() ||
+            !snapshot.engineReady ||
+            snapshot.updatingYtdlp ||
+            snapshot.diagnosing ||
+            snapshot.probing ||
+            snapshot.acquiring
+        ) {
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    diagnosing = true,
+                    diagnosticSucceeded = null,
+                    diagnosticLines = emptyList(),
+                    errorCode = null,
+                    errorMessage = null,
+                )
+            }
+
+            engine.diagnose(sourceUrl)
+                .onSuccess { diagnostic ->
+                    _uiState.update {
+                        it.copy(
+                            diagnosing = false,
+                            diagnosticSucceeded = diagnostic.executionSucceeded,
+                            diagnosticLines = diagnostic.lines,
+                        )
+                    }
+                }
+                .onFailure(::showFailure)
+        }
+    }
+
+    private suspend fun readYoutubeDlVersion(): String = withContext(Dispatchers.IO) {
+        val youtubeDl = YoutubeDL.getInstance()
+        youtubeDl.version(app)
+            ?: youtubeDl.versionName(app)
+            ?: "不明"
+    }
+
+    private fun safeUpdateDiagnostic(error: Throwable): String {
+        val raw = buildString {
+            append(error.message.orEmpty())
+            append('\n')
+            append(error.cause?.message.orEmpty())
+        }
+        val compact = raw
+            .lineSequence()
+            .map { it.trim() }
+            .firstOrNull { it.isNotBlank() }
+            .orEmpty()
+
+        return compact
+            .replace(Regex("https?://\\S+", RegexOption.IGNORE_CASE), "[URL]")
+            .replace(Regex("/data/\\S+", RegexOption.IGNORE_CASE), "[APP_PATH]")
+            .replace(Regex("/storage/\\S+", RegexOption.IGNORE_CASE), "[STORAGE_PATH]")
+            .replace(Regex("\\s+"), " ")
+            .take(220)
+            .ifBlank { "詳細なし" }
+    }
+
+    fun onUrlChanged(value: String) {
+        _uiState.update {
+            it.copy(
+                url = value,
+                detectedTitle = null,
+                detectedProvider = null,
+                diagnosticSucceeded = null,
+                diagnosticLines = emptyList(),
+                savedPath = null,
+                savedTitle = null,
+                errorCode = null,
+                errorMessage = null,
+            )
+        }
+    }
+
+    fun consumeSharedText(sharedText: String?) {
+        val url = sharedText
+            ?.let(URL_PATTERN::find)
+            ?.value
+            ?.trimEnd('.', ',', ';', ')', ']', '}', '>', '"', '\'')
+            .orEmpty()
+
+        if (url.isNotBlank()) {
+            onUrlChanged(url)
+        }
+    }
+
+    fun setRightsConfirmed(confirmed: Boolean) {
+        _uiState.update { it.copy(rightsConfirmed = confirmed) }
+    }
+
+    fun probe() {
+        val snapshot = _uiState.value
+        val sourceUrl = snapshot.url.trim()
+        if (
+            sourceUrl.isBlank() ||
+            snapshot.updatingYtdlp ||
+            snapshot.diagnosing ||
+            snapshot.probing ||
+            snapshot.acquiring
+        ) {
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    probing = true,
+                    errorCode = null,
+                    errorMessage = null,
+                    detectedTitle = null,
+                    detectedProvider = null,
+                )
+            }
+
+            engine.probe(sourceUrl)
+                .onSuccess { probe ->
+                    _uiState.update {
+                        it.copy(
+                            probing = false,
+                            detectedTitle = probe.title,
+                            detectedProvider = probe.provider,
+                        )
+                    }
+                }
+                .onFailure(::showFailure)
+        }
+    }
+
+    fun acquireMp3() {
+        val snapshot = _uiState.value
+        if (
+            snapshot.url.isBlank() ||
+            !snapshot.engineReady ||
+            !snapshot.rightsConfirmed ||
+            snapshot.updatingYtdlp ||
+            snapshot.diagnosing ||
+            snapshot.acquiring ||
+            snapshot.probing
+        ) {
+            return
+        }
+
+        acquireJob = viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    acquiring = true,
+                    progressPercent = 0f,
+                    progressMessage = "取得を開始しています",
+                    savedPath = null,
+                    savedTitle = null,
+                    errorCode = null,
+                    errorMessage = null,
+                )
+            }
+
+            engine.acquireMp3(snapshot.url) { progress ->
+                _uiState.update {
+                    it.copy(
+                        progressPercent = progress.percent,
+                        progressMessage = progress.message,
+                    )
+                }
+            }
+                .onSuccess { result ->
+                    _uiState.update {
+                        it.copy(
+                            acquiring = false,
+                            progressPercent = 100f,
+                            progressMessage = "保存完了",
+                            savedPath = result.file.absolutePath,
+                            savedTitle = result.title,
+                            detectedTitle = it.detectedTitle ?: result.title,
+                            detectedProvider = it.detectedProvider ?: result.provider,
+                            rightsConfirmed = false,
+                        )
+                    }
+                }
+                .onFailure(::showFailure)
+        }
+    }
+
+    fun cancelAcquisition() {
+        engine.cancel()
+        acquireJob?.cancel()
+        acquireJob = null
+        _uiState.update {
+            it.copy(
+                acquiring = false,
+                progressMessage = "キャンセルしました",
+            )
+        }
+    }
+
+    private fun showFailure(error: Throwable) {
+        val engineError = error as? AcquisitionEngineException
+        val code = engineError?.code ?: "UNEXPECTED"
+        val message = engineError?.message ?: "処理に失敗しました。コード: $code"
+
+        _uiState.update {
+            it.copy(
+                diagnosing = false,
+                probing = false,
+                acquiring = false,
+                errorCode = code,
+                errorMessage = message,
+                progressMessage = "",
+            )
+        }
+    }
+
+    override fun onCleared() {
+        engine.cancel()
+        super.onCleared()
+    }
+
+    private companion object {
+        val URL_PATTERN = Regex("https?://[^\\s]+", RegexOption.IGNORE_CASE)
+    }
+}

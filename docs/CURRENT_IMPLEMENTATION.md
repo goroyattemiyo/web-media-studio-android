@@ -38,6 +38,9 @@ Current target:
 - explicit `Update yt-dlp stable` action using `updateYoutubeDL(..., UpdateChannel.STABLE)`
 - update failure keeps the existing installed/bundled yt-dlp version and reports `YTDLP_UPDATE_FAILED`
 - Probe/acquisition controls are disabled while yt-dlp is being updated
+- explicit `yt-dlp Diagnostics` action using `--verbose --simulate --no-playlist`
+- diagnostic summary extracts only relevant runtime/provider lines such as `JS runtimes`, `PO Token Providers`, `JS Challenge Providers`, player-client hints and HTTP 403 lines
+- diagnostic output is sanitized before display; URLs and app/storage paths are not exposed verbatim
 
 The app does **not** blindly update yt-dlp during startup. Runtime update is an explicit Gate A0 diagnostic action.
 
@@ -51,25 +54,32 @@ The app does **not** blindly update yt-dlp during startup. Runtime update is an 
 
 ### YouTube acquisition
 
-The previously tested public YouTube URL reached Probe PASS, but MP3 acquisition returned:
+The tested public YouTube URL reaches Probe PASS but MP3 acquisition still returns:
 
 `SOURCE_FORBIDDEN`
 
-This does not yet prove a JavaScript runtime problem. The same URL must be retested after explicit stable yt-dlp update.
+The failure persisted after moving to the current stable-update path, so stale yt-dlp alone is not considered sufficient explanation.
+
+Current next diagnostic target is to determine from yt-dlp verbose output whether the Android runtime has:
+
+- a usable JS runtime / QuickJS,
+- a PO Token provider,
+- a usable JS Challenge provider,
+- player-client-related warnings associated with HTTP 403.
+
+Do not add a new QuickJS integration until diagnostics show the currently packaged QuickJS path is unavailable or unusable.
 
 ### TikTok Probe
 
-The previously tested public TikTok URL returned `PROBE_FAILED` and exposed:
-
-`WARNING: Your yt-dlp version (2025.11.12) is older than 90 days!`
-
-This stale active yt-dlp version is the immediate hypothesis being tested by the new stable-update action.
+The earlier public TikTok URL returned `PROBE_FAILED` and exposed a stale yt-dlp warning (`2025.11.12`). The same URL should be retested after the explicit stable update.
 
 ## Not yet verified
 
 None of the following may be described as supported until tested successfully on the target device:
 
 - stable yt-dlp runtime update on Android
+- packaged QuickJS availability/use by current yt-dlp
+- PO Token provider availability
 - YouTube MP3 acquisition
 - TikTok acquisition
 - Instagram acquisition
@@ -91,15 +101,25 @@ None of the following may be described as supported until tested successfully on
 
 ## Next acceptance event
 
-Install the CI-built APK and run the same test URLs in this order:
+Install the CI-built APK and run the same YouTube URL in this order:
 
 1. confirm displayed active yt-dlp version,
 2. tap `Update yt-dlp stable`,
-3. confirm the displayed version/update result,
-4. YouTube: Probe -> rights confirmation -> Save MP3 192 -> Media3 Play,
-5. TikTok: Probe -> rights confirmation -> Save MP3 192 -> Media3 Play where Probe succeeds.
+3. tap `yt-dlp Diagnostics`,
+4. capture the displayed lines for `JS runtimes`, `PO Token Providers`, `JS Challenge Providers` and any player-client / HTTP 403 warning,
+5. Probe,
+6. rights confirmation,
+7. Save MP3 192,
+8. if saved, Media3 Play.
 
-Only if current stable yt-dlp still returns an actual JS/EJS-specific diagnostic should Gate A0 move to JavaScript-runtime work.
+Then repeat diagnostics/Probe/acquisition with the same TikTok URL.
+
+Only after the runtime/provider diagnostics are known should Gate A0 choose between:
+
+- fixing packaged QuickJS/runtime wiring,
+- adding a PO Token provider path,
+- adjusting a provider/player-client integration,
+- or replacing the acquisition engine implementation.
 
 Do not mark Gate A0 PASS until at least one authorized/public source completes:
 

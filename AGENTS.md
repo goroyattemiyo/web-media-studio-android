@@ -79,7 +79,7 @@ A0 passes only when the target Android device can produce at least one permitted
 
 ## youtubedl-android compatibility caution
 
-The library is a feasibility candidate, not a permanent architecture dependency. Its current documentation advertises `0.18.1` while also mentioning a bundled Python 3.8 runtime. Do not blindly update yt-dlp on app startup. If the packaged runtime is incompatible with current extraction requirements, keep `MediaAcquisitionEngine` and replace only the engine implementation.
+The library is a feasibility candidate, not a permanent architecture dependency. WMS may perform a controlled yt-dlp stable update check no more than once per 24 hours after the acquisition engine initializes. The update must be best-effort: failure must preserve and continue with the currently installed/bundled yt-dlp, and normal acquisition must not depend on an update server being reachable. Keep the manual Developer-tools update action only as an explicit force-check/fallback. If the packaged runtime becomes incompatible with current extraction requirements, keep `MediaAcquisitionEngine` and replace only the engine implementation.
 
 ## Testing expectations
 

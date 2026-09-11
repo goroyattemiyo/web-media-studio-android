@@ -91,7 +91,9 @@ The following direct-URL intake flow is now verified on the target Android devic
 3. title/provider are displayed under `取得候補`,
 4. rights confirmation can be enabled,
 5. MP3 save completes successfully,
-6. the sheet displays `保存完了` with the saved title.
+6. the sheet displays `保存完了` with the saved title,
+7. closing the sheet returns to Search Home,
+8. the saved item plays successfully from the Search Home mini player.
 
 Verified sample:
 
@@ -99,7 +101,7 @@ Verified sample:
 
 This confirms the fixed path:
 
-`URL intake -> automatic Probe -> Import Sheet -> rights confirmation -> MP3 save -> saved state`
+`URL intake -> automatic Probe -> Import Sheet -> rights confirmation -> MP3 save -> Search Home mini player -> Media3 playback`
 
 ## Still to verify on the real device before closing Gate A1
 

@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,6 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -55,10 +55,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import com.goroyattemiyo.wms.search.SearchMediaItem
 import java.io.File
 
 class MainActivity : ComponentActivity() {
-    private val viewModel by viewModels<GateA0ViewModel>()
+    private val acquisitionViewModel by viewModels<GateA0ViewModel>()
+    private val searchViewModel by viewModels<SearchViewModel>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -66,7 +68,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             WmsTheme {
-                WmsRoot(viewModel)
+                WmsRoot(acquisitionViewModel, searchViewModel)
             }
         }
     }
@@ -79,76 +81,84 @@ class MainActivity : ComponentActivity() {
 
     private fun consumeShareIntent(intent: Intent?) {
         if (intent?.action == Intent.ACTION_SEND && intent.type == "text/plain") {
-            viewModel.consumeSharedText(intent.getStringExtra(Intent.EXTRA_TEXT))
+            acquisitionViewModel.consumeSharedText(intent.getStringExtra(Intent.EXTRA_TEXT))
         }
     }
 }
 
 @Composable
-private fun WmsRoot(viewModel: GateA0ViewModel) {
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
+private fun WmsRoot(
+    acquisitionViewModel: GateA0ViewModel,
+    searchViewModel: SearchViewModel,
+) {
+    val acquisitionState by acquisitionViewModel.uiState.collectAsStateWithLifecycle()
+    val searchState by searchViewModel.uiState.collectAsStateWithLifecycle()
     var searchText by remember { mutableStateOf("") }
     var importOpen by remember { mutableStateOf(false) }
     var developerOpen by remember { mutableStateOf(false) }
-    var searchNotice by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(state.url) {
-        if (state.url.isNotBlank()) {
+    LaunchedEffect(acquisitionState.url) {
+        if (acquisitionState.url.isNotBlank()) {
             importOpen = true
-            if (!state.probing && state.detectedTitle == null) {
-                viewModel.probe()
+            if (!acquisitionState.probing && acquisitionState.detectedTitle == null) {
+                acquisitionViewModel.probe()
             }
         }
     }
 
     SearchHome(
-        state = state,
+        acquisitionState = acquisitionState,
+        searchState = searchState,
         searchText = searchText,
         onSearchTextChanged = {
             searchText = it
-            searchNotice = null
+            searchViewModel.clearError()
         },
         onSubmit = {
             val value = searchText.trim()
             if (value.isNotBlank()) {
-                if (URL_PATTERN.matches(value)) {
-                    viewModel.onUrlChanged(value)
+                if (isDirectUrl(value)) {
+                    acquisitionViewModel.onUrlChanged(value)
                     importOpen = true
                 } else {
-                    searchNotice = "キーワード検索は次の実装でYouTube Providerから接続します。"
+                    searchViewModel.search(value)
                 }
             }
         },
-        searchNotice = searchNotice,
+        onImportResult = { item ->
+            acquisitionViewModel.onUrlChanged(item.url)
+            importOpen = true
+        },
         onOpenDeveloper = { developerOpen = !developerOpen },
         developerOpen = developerOpen,
-        onOpenSaved = { importOpen = true },
     )
 
-    if (importOpen && state.url.isNotBlank()) {
+    if (importOpen && acquisitionState.url.isNotBlank()) {
         ImportSheet(
-            state = state,
+            state = acquisitionState,
             onDismiss = { importOpen = false },
-            onRightsChanged = viewModel::setRightsConfirmed,
-            onSave = viewModel::acquireMp3,
-            onCancel = viewModel::cancelAcquisition,
-            onUpdateYoutubeDl = viewModel::updateYoutubeDl,
-            onDiagnostics = viewModel::runDiagnostics,
+            onRightsChanged = acquisitionViewModel::setRightsConfirmed,
+            onSave = acquisitionViewModel::acquireMp3,
+            onCancel = acquisitionViewModel::cancelAcquisition,
+            onUpdateYoutubeDl = acquisitionViewModel::updateYoutubeDl,
+            onDiagnostics = acquisitionViewModel::runDiagnostics,
         )
     }
 }
 
 @Composable
 private fun SearchHome(
-    state: GateA0UiState,
+    acquisitionState: GateA0UiState,
+    searchState: SearchUiState,
     searchText: String,
     onSearchTextChanged: (String) -> Unit,
     onSubmit: () -> Unit,
-    searchNotice: String?,
+    onImportResult: (SearchMediaItem) -> Unit,
     onOpenDeveloper: () -> Unit,
     developerOpen: Boolean,
-    onOpenSaved: () -> Unit,
 ) {
+    val context = LocalContext.current
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
@@ -163,38 +173,40 @@ private fun SearchHome(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .background(
-                            brush = Brush.radialGradient(
-                                colors = listOf(Color(0x332B8CFF), Color.Transparent),
-                            ),
-                            shape = RoundedCornerShape(18.dp),
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .background(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(Color(0x332B8CFF), Color.Transparent),
+                                ),
+                                shape = RoundedCornerShape(18.dp),
+                            )
+                            .padding(6.dp),
+                    ) {
+                        Image(
+                            painter = painterResource(R.drawable.wms_emblem),
+                            contentDescription = "WMS",
+                            modifier = Modifier.fillMaxSize(),
                         )
-                        .padding(6.dp),
-                ) {
-                    Image(
-                        painter = painterResource(R.drawable.wms_emblem),
-                        contentDescription = "WMS",
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "WMS",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = "Web Media Studio",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                 }
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text(
-                        text = "WMS",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        text = "Web Media Studio",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-                Spacer(Modifier.weight(1f))
                 TextButton(onClick = onOpenDeveloper) {
                     Text("⋮")
                 }
@@ -228,9 +240,15 @@ private fun SearchHome(
                     Button(
                         onClick = onSubmit,
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = searchText.trim().isNotEmpty(),
+                        enabled = searchText.trim().isNotEmpty() && !searchState.searching,
                     ) {
-                        Text(if (URL_PATTERN.matches(searchText.trim())) "URLを取り込む" else "検索")
+                        Text(
+                            when {
+                                searchState.searching -> "検索中…"
+                                isDirectUrl(searchText.trim()) -> "URLを取り込む"
+                                else -> "検索"
+                            },
+                        )
                     }
                 }
             }
@@ -239,34 +257,51 @@ private fun SearchHome(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Button(onClick = { }) { Text("すべて") }
-                OutlinedButton(onClick = { }) { Text("YouTube") }
-                OutlinedButton(onClick = { }, enabled = false) { Text("More soon") }
+                Button(onClick = { }) { Text("YouTube") }
+                OutlinedButton(onClick = { }, enabled = false) { Text("TikTok · 今後") }
+                OutlinedButton(onClick = { }, enabled = false) { Text("Instagram · 今後") }
+                OutlinedButton(onClick = { }, enabled = false) { Text("Web · 今後") }
             }
 
-            searchNotice?.let {
+            searchState.errorMessage?.let { message ->
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = message,
+                        modifier = Modifier.padding(16.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            if (searchState.results.isNotEmpty()) {
                 Text(
-                    text = it,
+                    text = "検索結果 · ${searchState.results.size}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                searchState.results.forEach { item ->
+                    SearchResultCard(
+                        item = item,
+                        onImport = { onImportResult(item) },
+                        onOpenSource = {
+                            runCatching {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, Uri.parse(item.url)),
+                                )
+                            }
+                        },
+                    )
+                }
+            } else if (!searchState.searching) {
+                Text(
+                    text = "検索すると、ここにYouTubeの候補が表示されます。",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
 
             if (developerOpen) {
-                DeveloperStatusCard(state)
-            }
-
-            Text(
-                text = "最近の検索",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-            )
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "検索Provider接続後、ここに最近の検索を表示します。",
-                    modifier = Modifier.padding(18.dp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                DeveloperStatusCard(acquisitionState)
             }
 
             Text(
@@ -274,11 +309,10 @@ private fun SearchHome(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
-            if (state.savedPath != null) {
+            if (acquisitionState.savedPath != null) {
                 SavedMiniPlayer(
-                    path = state.savedPath,
-                    title = state.savedTitle ?: "保存済み音声",
-                    onOpen = onOpenSaved,
+                    path = acquisitionState.savedPath,
+                    title = acquisitionState.savedTitle ?: "保存済み音声",
                 )
             } else {
                 Card(modifier = Modifier.fillMaxWidth()) {
@@ -292,6 +326,70 @@ private fun SearchHome(
 
             BottomNavigationPreview()
             Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
+@Composable
+private fun SearchResultCard(
+    item: SearchMediaItem,
+    onImport: () -> Unit,
+    onOpenSource: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(width = 96.dp, height = 58.dp)
+                        .background(
+                            brush = Brush.linearGradient(
+                                listOf(Color(0xFF11263F), Color(0xFF251B42)),
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "▶",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = Color(0xFF57D8FF),
+                    )
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = item.title,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    if (item.author.isNotBlank()) {
+                        Text(
+                            text = item.author,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Text(
+                        text = item.provider.replaceFirstChar { it.uppercase() },
+                        color = Color(0xFF57D8FF),
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onImport) {
+                    Text("WMSに追加")
+                }
+                OutlinedButton(onClick = onOpenSource) {
+                    Text("元サイト")
+                }
+            }
         }
     }
 }
@@ -312,10 +410,16 @@ private fun DeveloperStatusCard(state: GateA0UiState) {
                 text = "yt-dlp: ${state.ytdlpVersion ?: "確認中"}",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Text(
+                text = "検索Provider: YouTube / WMS Media Worker",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ImportSheet(
     state: GateA0UiState,
@@ -461,14 +565,22 @@ private fun ImportSheet(
                         Text("yt-dlp: ${state.ytdlpVersion ?: "確認中"}")
                         OutlinedButton(
                             onClick = onUpdateYoutubeDl,
-                            enabled = state.engineReady && !state.updatingYtdlp && !state.diagnosing && !state.probing && !state.acquiring,
+                            enabled = state.engineReady &&
+                                !state.updatingYtdlp &&
+                                !state.diagnosing &&
+                                !state.probing &&
+                                !state.acquiring,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text(if (state.updatingYtdlp) "Updating…" else "Update yt-dlp stable")
                         }
                         OutlinedButton(
                             onClick = onDiagnostics,
-                            enabled = state.engineReady && !state.updatingYtdlp && !state.diagnosing && !state.probing && !state.acquiring,
+                            enabled = state.engineReady &&
+                                !state.updatingYtdlp &&
+                                !state.diagnosing &&
+                                !state.probing &&
+                                !state.acquiring,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text(if (state.diagnosing) "Diagnosing…" else "yt-dlp Diagnostics")
@@ -486,7 +598,7 @@ private fun ImportSheet(
 }
 
 @Composable
-private fun SavedMiniPlayer(path: String, title: String, onOpen: () -> Unit) {
+private fun SavedMiniPlayer(path: String, title: String) {
     val context = LocalContext.current
     val player = remember { ExoPlayer.Builder(context).build() }
     var isPlaying by remember { mutableStateOf(false) }
@@ -515,30 +627,49 @@ private fun SavedMiniPlayer(path: String, title: String, onOpen: () -> Unit) {
     }
 
     Card(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Image(
-                painter = painterResource(R.drawable.wms_emblem),
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, fontWeight = FontWeight.Bold, maxLines = 2)
-                Text(
-                    text = "Local · MP3",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(58.dp)
+                        .background(
+                            brush = Brush.radialGradient(
+                                listOf(Color(0x6657D8FF), Color(0x221D64FF), Color.Transparent),
+                            ),
+                            shape = RoundedCornerShape(18.dp),
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.wms_emblem),
+                        contentDescription = null,
+                        modifier = Modifier.size(42.dp),
+                    )
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(title, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "Local · WMS",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
             }
-            Button(onClick = { if (player.isPlaying) player.pause() else player.play() }) {
-                Text(if (isPlaying) "Ⅱ" else "▶")
+            Button(
+                onClick = {
+                    if (player.isPlaying) player.pause() else player.play()
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(if (isPlaying) "Pause" else "Play")
             }
-            TextButton(onClick = onOpen) { Text("›") }
         }
     }
 }
@@ -549,27 +680,27 @@ private fun BottomNavigationPreview() {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .padding(horizontal = 10.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("⌕ Search", fontWeight = FontWeight.Bold)
-            Text("Library", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("Playlist", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            TextButton(onClick = { }) { Text("検索") }
+            TextButton(onClick = { }, enabled = false) { Text("Library") }
+            TextButton(onClick = { }, enabled = false) { Text("Playlist") }
         }
     }
 }
 
 private val WmsDarkColors = darkColorScheme(
-    primary = Color(0xFF3AF2FF),
-    onPrimary = Color(0xFF041216),
-    secondary = Color(0xFF9B4FFF),
+    primary = Color(0xFF57D8FF),
+    onPrimary = Color(0xFF041019),
     background = Color(0xFF05070D),
     onBackground = Color(0xFFF4F7FF),
-    surface = Color(0xFF111722),
+    surface = Color(0xFF111620),
     onSurface = Color(0xFFF4F7FF),
-    surfaceVariant = Color(0xFF1B2432),
-    onSurfaceVariant = Color(0xFFAEB8C8),
+    surfaceVariant = Color(0xFF1A2230),
+    onSurfaceVariant = Color(0xFFAEBBCB),
+    secondary = Color(0xFF9B6BFF),
     error = Color(0xFFFFB4AB),
 )
 
@@ -581,4 +712,6 @@ private fun WmsTheme(content: @Composable () -> Unit) {
     )
 }
 
-private val URL_PATTERN = Regex("https?://\\S+", RegexOption.IGNORE_CASE)
+private fun isDirectUrl(value: String): Boolean = URL_PATTERN.matches(value.trim())
+
+private val URL_PATTERN = Regex("https?://[^\\s]+", RegexOption.IGNORE_CASE)

@@ -1,6 +1,7 @@
 package com.goroyattemiyo.wms
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.goroyattemiyo.wms.acquisition.AcquisitionEngineException
@@ -40,6 +41,7 @@ data class GateA0UiState(
 class GateA0ViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application
     private val engine = YoutubeDlAcquisitionEngine(application)
+    private val preferences = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val _uiState = MutableStateFlow(GateA0UiState())
     val uiState = _uiState.asStateFlow()
 
@@ -62,6 +64,10 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
                 )
             }
 
+            if (result.ready && shouldAutoUpdateYoutubeDl()) {
+                refreshYoutubeDlStable(automatic = true)
+            }
+
             if (result.ready && _uiState.value.url.isNotBlank()) {
                 probe()
             }
@@ -81,52 +87,81 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
         }
 
         viewModelScope.launch {
-            _uiState.update {
-                it.copy(
-                    updatingYtdlp = true,
-                    engineMessage = "yt-dlp stableを確認しています",
-                    errorCode = null,
-                    errorMessage = null,
-                )
-            }
+            refreshYoutubeDlStable(automatic = false)
+        }
+    }
 
-            val result = withContext(Dispatchers.IO) {
-                runCatching {
-                    val youtubeDl = YoutubeDL.getInstance()
-                    val status = youtubeDl.updateYoutubeDL(app, YoutubeDL.UpdateChannel.STABLE)
-                    val version = youtubeDl.version(app)
-                        ?: youtubeDl.versionName(app)
-                        ?: "不明"
-                    status to version
-                }
-            }
+    private suspend fun refreshYoutubeDlStable(automatic: Boolean) {
+        _uiState.update {
+            it.copy(
+                updatingYtdlp = true,
+                engineMessage = if (automatic) {
+                    "yt-dlp stableを自動確認しています"
+                } else {
+                    "yt-dlp stableを確認しています"
+                },
+                errorCode = null,
+                errorMessage = null,
+            )
+        }
 
-            result.onSuccess { (status, version) ->
-                val message = when (status) {
-                    YoutubeDL.UpdateStatus.DONE -> "yt-dlp stableへ更新しました"
-                    YoutubeDL.UpdateStatus.ALREADY_UP_TO_DATE -> "yt-dlpはstable最新版です"
-                    null -> "yt-dlp stable確認が完了しました"
-                }
-                _uiState.update {
-                    it.copy(
-                        updatingYtdlp = false,
-                        engineMessage = message,
-                        ytdlpVersion = version,
-                    )
-                }
-            }.onFailure { error ->
-                val version = readYoutubeDlVersion()
-                _uiState.update {
-                    it.copy(
-                        updatingYtdlp = false,
-                        engineMessage = "yt-dlp更新に失敗。現在版で継続します",
-                        ytdlpVersion = version,
-                        errorCode = "YTDLP_UPDATE_FAILED",
-                        errorMessage = "yt-dlp stable更新に失敗しました。現在版は保持されています。診断: ${safeUpdateDiagnostic(error)}",
-                    )
-                }
+        if (automatic) {
+            preferences.edit()
+                .putLong(KEY_LAST_AUTO_UPDATE_CHECK_MS, System.currentTimeMillis())
+                .apply()
+        }
+
+        val result = withContext(Dispatchers.IO) {
+            runCatching {
+                val youtubeDl = YoutubeDL.getInstance()
+                val status = youtubeDl.updateYoutubeDL(app, YoutubeDL.UpdateChannel.STABLE)
+                val version = youtubeDl.version(app)
+                    ?: youtubeDl.versionName(app)
+                    ?: "不明"
+                status to version
             }
         }
+
+        result.onSuccess { (status, version) ->
+            val message = when (status) {
+                YoutubeDL.UpdateStatus.DONE -> if (automatic) {
+                    "yt-dlp stableを自動更新しました"
+                } else {
+                    "yt-dlp stableへ更新しました"
+                }
+                YoutubeDL.UpdateStatus.ALREADY_UP_TO_DATE -> "yt-dlpはstable最新版です"
+                null -> "yt-dlp stable確認が完了しました"
+            }
+            _uiState.update {
+                it.copy(
+                    updatingYtdlp = false,
+                    engineMessage = message,
+                    ytdlpVersion = version,
+                )
+            }
+        }.onFailure { error ->
+            val version = readYoutubeDlVersion()
+            _uiState.update {
+                it.copy(
+                    updatingYtdlp = false,
+                    engineMessage = if (automatic) {
+                        "yt-dlp自動更新に失敗。現在版で継続します"
+                    } else {
+                        "yt-dlp更新に失敗。現在版で継続します"
+                    },
+                    ytdlpVersion = version,
+                    errorCode = if (automatic) null else "YTDLP_UPDATE_FAILED",
+                    errorMessage = if (automatic) null else {
+                        "yt-dlp stable更新に失敗しました。現在版は保持されています。診断: ${safeUpdateDiagnostic(error)}"
+                    },
+                )
+            }
+        }
+    }
+
+    private fun shouldAutoUpdateYoutubeDl(): Boolean {
+        val lastCheck = preferences.getLong(KEY_LAST_AUTO_UPDATE_CHECK_MS, 0L)
+        return System.currentTimeMillis() - lastCheck >= AUTO_UPDATE_INTERVAL_MS
     }
 
     fun runDiagnostics() {
@@ -373,6 +408,9 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private companion object {
+        const val PREFS_NAME = "wms_runtime_update"
+        const val KEY_LAST_AUTO_UPDATE_CHECK_MS = "last_ytdlp_auto_check_ms"
+        const val AUTO_UPDATE_INTERVAL_MS = 24L * 60L * 60L * 1000L
         val URL_PATTERN = Regex("https?://[^\\s]+", RegexOption.IGNORE_CASE)
     }
 }

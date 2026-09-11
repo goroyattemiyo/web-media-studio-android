@@ -84,6 +84,20 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
             validateUrl(sourceUrl)
             ensureReady()
 
+            val source = sourceUrl.trim()
+            val info = try {
+                YoutubeDL.getInstance().getInfo(source)
+            } catch (error: Throwable) {
+                throw classifyError(error, "ACQUIRE_FAILED")
+            }
+
+            if (info.duration > MAX_DURATION_SECONDS) {
+                throw AcquisitionEngineException(
+                    code = "DURATION_LIMIT",
+                    message = "Gate A0では30分以内のメディアだけを対象にします。",
+                )
+            }
+
             val outputRoot = File(
                 appContext.getExternalFilesDir(Environment.DIRECTORY_MUSIC) ?: appContext.filesDir,
                 "wms/acquired",
@@ -93,9 +107,9 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
             val jobDir = File(jobsRoot, "job-${UUID.randomUUID()}").apply { mkdirs() }
 
             try {
-                val request = YoutubeDLRequest(sourceUrl.trim()).apply {
+                val request = YoutubeDLRequest(source).apply {
                     addOption("--no-playlist")
-                    addOption("--match-filter", "duration <= 1800")
+                    addOption("--match-filter", "duration <= $MAX_DURATION_SECONDS")
                     addOption("--max-filesize", "250M")
                     addOption("--extract-audio")
                     addOption("--audio-format", "mp3")
@@ -107,7 +121,7 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
 
                 onProgress(AcquisitionProgress(0f, "取得を開始しています"))
 
-                try {
+                val response = try {
                     YoutubeDL.getInstance().execute(
                         request,
                         PROCESS_ID,
@@ -127,10 +141,23 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
                     .listFiles()
                     ?.filter { it.isFile && it.extension.equals("mp3", ignoreCase = true) }
                     ?.maxByOrNull { it.lastModified() }
-                    ?: throw AcquisitionEngineException(
+
+                if (produced == null) {
+                    val executionText = "${response.out}\n${response.err}".lowercase()
+                    if (
+                        "does not pass filter" in executionText ||
+                        ("duration" in executionText && MAX_DURATION_SECONDS.toString() in executionText)
+                    ) {
+                        throw AcquisitionEngineException(
+                            code = "DURATION_LIMIT",
+                            message = "Gate A0では30分以内のメディアだけを対象にします。",
+                        )
+                    }
+                    throw AcquisitionEngineException(
                         code = "OUTPUT_NOT_FOUND",
                         message = "MP3生成後のファイルを確認できませんでした。",
                     )
+                }
 
                 val destination = File(outputRoot, "wms-${UUID.randomUUID()}.mp3")
                 if (!produced.renameTo(destination)) {
@@ -144,9 +171,7 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
                     )
                 }
 
-                val title = runCatching {
-                    YoutubeDL.getInstance().getInfo(sourceUrl.trim()).title?.trim().orEmpty()
-                }.getOrDefault("").ifBlank { "保存済み音声" }
+                val title = info.title?.trim().orEmpty().ifBlank { "保存済み音声" }
 
                 AcquisitionResult(
                     file = destination,
@@ -256,7 +281,7 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
                     error,
                 )
 
-            "duration" in text && "1800" in text ->
+            "duration" in text && MAX_DURATION_SECONDS.toString() in text ->
                 AcquisitionEngineException(
                     "DURATION_LIMIT",
                     "Gate A0では30分以内のメディアだけを対象にします。",
@@ -273,5 +298,6 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
 
     private companion object {
         const val PROCESS_ID = "wms-gate-a0"
+        const val MAX_DURATION_SECONDS = 1800
     }
 }

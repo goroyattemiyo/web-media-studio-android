@@ -79,6 +79,10 @@ class LocalYoutubeSearchProvider(context: Context) : SearchProvider {
             .takeIf(::isSafeHttpUrl)
             ?: thumbnailFrom(item.optJSONArray("thumbnails"))
 
+        val durationSeconds = item.optDouble("duration", Double.NaN)
+            .takeIf { it.isFinite() && it > 0.0 }
+            ?.toInt()
+
         return SearchMediaItem(
             provider = "youtube",
             sourceId = id,
@@ -86,6 +90,7 @@ class LocalYoutubeSearchProvider(context: Context) : SearchProvider {
             title = title,
             author = author,
             thumbnailUrl = thumbnail,
+            durationSeconds = durationSeconds,
             canDownload = true,
         )
     }

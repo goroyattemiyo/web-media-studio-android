@@ -19,7 +19,8 @@ class LocalYoutubeSearchProvider(context: Context) : SearchProvider {
                 require(trimmed.length >= 2) { "2文字以上で検索してください。" }
 
                 val safeMax = maxResults.coerceIn(1, 12)
-                YoutubeDL.getInstance().init(appContext)
+                val youtubeDl = YoutubeDL.getInstance()
+                youtubeDl.init(appContext)
 
                 val request = YoutubeDLRequest("ytsearch${safeMax}:$trimmed").apply {
                     addOption("--flat-playlist")
@@ -30,7 +31,20 @@ class LocalYoutubeSearchProvider(context: Context) : SearchProvider {
                     addOption("--playlist-end", safeMax.toString())
                 }
 
-                val response = YoutubeDL.getInstance().execute(request, SEARCH_PROCESS_ID)
+                val response = try {
+                    // updateYoutubeDL() is @Synchronized on the same YoutubeDL singleton.
+                    // Taking that monitor here prevents search from starting while the
+                    // updater is replacing the yt-dlp executable on disk.
+                    synchronized(youtubeDl) {
+                        youtubeDl.execute(request, SEARCH_PROCESS_ID)
+                    }
+                } catch (error: Throwable) {
+                    throw IllegalStateException(
+                        "端末内YouTube検索に失敗しました。診断: ${safeDiagnostic(error.message.orEmpty())}",
+                        error,
+                    )
+                }
+
                 val results = response.out
                     .lineSequence()
                     .map(String::trim)
@@ -120,17 +134,29 @@ class LocalYoutubeSearchProvider(context: Context) : SearchProvider {
         uri.scheme in setOf("http", "https") && !uri.host.isNullOrBlank() && uri.rawUserInfo == null
     }.getOrDefault(false)
 
-    private fun safeDiagnostic(raw: String): String = raw
-        .lineSequence()
-        .map(String::trim)
-        .firstOrNull { it.isNotBlank() }
-        .orEmpty()
-        .replace(Regex("https?://\\S+", RegexOption.IGNORE_CASE), "[URL]")
-        .replace(Regex("/data/\\S+", RegexOption.IGNORE_CASE), "[APP_PATH]")
-        .replace(Regex("/storage/\\S+", RegexOption.IGNORE_CASE), "[STORAGE_PATH]")
-        .replace(Regex("\\s+"), " ")
-        .take(220)
-        .ifBlank { "詳細なし" }
+    private fun safeDiagnostic(raw: String): String {
+        val lines = raw
+            .lineSequence()
+            .map(String::trim)
+            .filter { it.isNotBlank() }
+            .toList()
+
+        val useful = lines.asReversed().firstOrNull { line ->
+            val lower = line.lowercase()
+            !lower.startsWith("traceback") &&
+                !lower.startsWith("file ") &&
+                !lower.startsWith("at ") &&
+                !lower.startsWith("during handling of the above exception")
+        } ?: lines.lastOrNull().orEmpty()
+
+        return useful
+            .replace(Regex("https?://\\S+", RegexOption.IGNORE_CASE), "[URL]")
+            .replace(Regex("/data/\\S+", RegexOption.IGNORE_CASE), "[APP_PATH]")
+            .replace(Regex("/storage/\\S+", RegexOption.IGNORE_CASE), "[STORAGE_PATH]")
+            .replace(Regex("\\s+"), " ")
+            .take(220)
+            .ifBlank { "詳細なし" }
+    }
 
     private fun String.cleanJsonString(): String = trim().takeUnless { it == "null" } ?: ""
 

@@ -1,10 +1,11 @@
 package com.goroyattemiyo.wms
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.goroyattemiyo.wms.search.LocalYoutubeSearchProvider
 import com.goroyattemiyo.wms.search.SearchMediaItem
 import com.goroyattemiyo.wms.search.SearchProvider
-import com.goroyattemiyo.wms.search.WmsMediaSearchProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -17,9 +18,8 @@ data class SearchUiState(
     val errorMessage: String? = null,
 )
 
-class SearchViewModel(
-    private val provider: SearchProvider = WmsMediaSearchProvider(),
-) : ViewModel() {
+class SearchViewModel(application: Application) : AndroidViewModel(application) {
+    private val provider: SearchProvider = LocalYoutubeSearchProvider(application)
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState = _uiState.asStateFlow()
 
@@ -52,7 +52,7 @@ class SearchViewModel(
                         it.copy(
                             searching = false,
                             results = emptyList(),
-                            errorMessage = error.message?.take(180) ?: "動画検索に失敗しました。",
+                            errorMessage = error.message?.take(240) ?: "動画検索に失敗しました。",
                         )
                     }
                 }

@@ -5,11 +5,14 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.goroyattemiyo.wms.acquisition.AcquisitionEngineException
 import com.goroyattemiyo.wms.acquisition.YoutubeDlAcquisitionEngine
+import com.yausername.youtubedl_android.YoutubeDL
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class GateA0UiState(
     val url: String = "",
@@ -39,17 +42,41 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
     init {
         viewModelScope.launch {
             val result = engine.initialize()
+            val engineMessage = if (result.ready) {
+                updateYoutubeDlAndDescribe(application)
+            } else {
+                result.message
+            }
+
             _uiState.update {
                 it.copy(
                     engineReady = result.ready,
                     engineCode = result.code,
-                    engineMessage = result.message,
+                    engineMessage = engineMessage,
                     errorCode = if (result.ready) null else result.code,
                     errorMessage = if (result.ready) null else result.message,
                 )
             }
         }
     }
+
+    private suspend fun updateYoutubeDlAndDescribe(application: Application): String =
+        withContext(Dispatchers.IO) {
+            val youtubeDl = YoutubeDL.getInstance()
+            val updateSucceeded = runCatching {
+                youtubeDl.updateYoutubeDL(application, YoutubeDL.UpdateChannel.STABLE)
+            }.isSuccess
+
+            val version = youtubeDl.version(application)
+                ?: youtubeDl.versionName(application)
+                ?: "組み込み版"
+
+            if (updateSucceeded) {
+                "取得エンジン準備完了 / yt-dlp $version"
+            } else {
+                "取得エンジン準備完了 / yt-dlp更新確認に失敗。$version で継続"
+            }
+        }
 
     fun onUrlChanged(value: String) {
         _uiState.update {

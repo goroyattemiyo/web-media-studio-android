@@ -14,11 +14,11 @@ Draft PR:
 
 `#1 feat: bootstrap Android Gate A0 local acquisition spike`
 
-PR #1 must remain Draft and must not be merged until Gate A0 succeeds on a real device.
+Gate A0 has now passed on a real Android device for a permitted/public YouTube sample. PR #1 may proceed toward merge after the latest CI for the branch is green.
 
 Current target:
 
-**Gate A0 — prove local Android acquisition before building the full native product.**
+**Gate A0 — PASS. Prepare transition to Gate A1+ product work after merge.**
 
 ## Implemented in the current Gate A0 line
 
@@ -34,57 +34,55 @@ Current target:
 - one acquisition process at a time plus cancel
 - sanitized/classified extractor diagnostics
 - GitHub Actions build / unit test / lint / debug APK artifact pipeline
-- Gate A0 diagnostic display of the active yt-dlp version
+- active yt-dlp version display
 - explicit `Update yt-dlp stable` action using `updateYoutubeDL(..., UpdateChannel.STABLE)`
-- update failure keeps the existing installed/bundled yt-dlp version and reports `YTDLP_UPDATE_FAILED`
-- Probe/acquisition controls are disabled while yt-dlp is being updated
+- update failure fallback to existing bundled/installed yt-dlp
+- Probe/acquisition controls disabled while yt-dlp is being updated
 - explicit `yt-dlp Diagnostics` action using `--verbose --simulate --no-playlist`
-- diagnostic summary extracts only relevant runtime/provider lines such as `JS runtimes`, `PO Token Providers`, `JS Challenge Providers`, player-client hints and HTTP 403 lines
-- diagnostic output is sanitized before display; URLs and app/storage paths are not exposed verbatim
+- sanitized extraction of relevant runtime/provider lines
 
-The app does **not** blindly update yt-dlp during startup. Runtime update is an explicit Gate A0 diagnostic action.
+The app does **not** blindly update yt-dlp during startup. Runtime update remains an explicit diagnostic/user action.
 
 ## Verified on real Android device
 
-- APK installs and launches
-- Acquisition Engine initializes as `READY`
-- public YouTube metadata Probe succeeds and returns title/provider
+The following path has passed end-to-end on the target device:
 
-## Current real-device failures / open questions
+1. APK installs and launches.
+2. Acquisition Engine initializes as `READY`.
+3. `Update yt-dlp stable` succeeds.
+4. Active yt-dlp version displays as `2026.08.19`.
+5. Public YouTube metadata Probe succeeds and returns title/provider.
+6. Rights/permission confirmation can be enabled.
+7. `Save audio / MP3 192 kbps` completes successfully.
+8. A non-empty MP3 file is written under app-specific Android storage.
+9. Media3 local preview opens the produced file.
+10. Playback succeeds; the UI shows `Pause` while audio is playing.
 
-### YouTube acquisition
+Observed successful sample title:
 
-The tested public YouTube URL reaches Probe PASS but MP3 acquisition still returns:
+`Michael Jackson - Beat It (Official 4K Video)`
 
-`SOURCE_FORBIDDEN`
+This establishes the Gate A0 acceptance path:
 
-The failure persisted after moving to the current stable-update path, so stale yt-dlp alone is not considered sufficient explanation.
+`Probe -> Save MP3 -> non-empty local file -> Media3 Play`
 
-Current next diagnostic target is to determine from yt-dlp verbose output whether the Android runtime has:
+## Gate A0 status
 
-- a usable JS runtime / QuickJS,
-- a PO Token provider,
-- a usable JS Challenge provider,
-- player-client-related warnings associated with HTTP 403.
+**PASS**
 
-Do not add a new QuickJS integration until diagnostics show the currently packaged QuickJS path is unavailable or unusable.
+The previous `SOURCE_FORBIDDEN` failure did not persist after updating the active yt-dlp version to the current stable path. Therefore stale yt-dlp was materially involved in the earlier acquisition failure for the tested sample.
 
-### TikTok Probe
+This result does not prove universal provider support. YouTube/TikTok/Instagram/direct-media support must still be recorded provider-by-provider later.
 
-The earlier public TikTok URL returned `PROBE_FAILED` and exposed a stale yt-dlp warning (`2025.11.12`). The same URL should be retested after the explicit stable update.
+## Still not verified
 
-## Not yet verified
+Do not describe these as supported yet:
 
-None of the following may be described as supported until tested successfully on the target device:
-
-- stable yt-dlp runtime update on Android
-- packaged QuickJS availability/use by current yt-dlp
-- PO Token provider availability
-- YouTube MP3 acquisition
 - TikTok acquisition
 - Instagram acquisition
 - direct media URL acquisition
-- produced MP3 playback through Media3 after a successful acquisition
+- packaged QuickJS behavior across all providers
+- PO Token provider availability/use
 - background playback
 - persistent Room library
 - persistent playlists
@@ -99,28 +97,14 @@ None of the following may be described as supported until tested successfully on
 - no authentication/access-control bypass
 - no arbitrary yt-dlp options in the user interface
 
-## Next acceptance event
+## Next step
 
-Install the CI-built APK and run the same YouTube URL in this order:
+After latest branch CI passes, merge PR #1 with squash and move to the next Android product gates:
 
-1. confirm displayed active yt-dlp version,
-2. tap `Update yt-dlp stable`,
-3. tap `yt-dlp Diagnostics`,
-4. capture the displayed lines for `JS runtimes`, `PO Token Providers`, `JS Challenge Providers` and any player-client / HTTP 403 warning,
-5. Probe,
-6. rights confirmation,
-7. Save MP3 192,
-8. if saved, Media3 Play.
+- Gate A1: share intake hardening
+- Gate A2: managed acquisition job/service
+- Gate A3: persistent Local Library
+- Gate A4: persistent playlists
+- Gate A5: MediaLibraryService/background/screen-off playback
 
-Then repeat diagnostics/Probe/acquisition with the same TikTok URL.
-
-Only after the runtime/provider diagnostics are known should Gate A0 choose between:
-
-- fixing packaged QuickJS/runtime wiring,
-- adding a PO Token provider path,
-- adjusting a provider/player-client integration,
-- or replacing the acquisition engine implementation.
-
-Do not mark Gate A0 PASS until at least one authorized/public source completes:
-
-`Probe -> Save MP3 -> non-empty local file -> Media3 Play`
+Provider matrix expansion remains separate from the fact that Gate A0 feasibility is now proven.

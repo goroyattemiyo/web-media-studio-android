@@ -7,6 +7,7 @@ data class SearchMediaItem(
     val title: String,
     val author: String,
     val thumbnailUrl: String?,
+    val durationSeconds: Int?,
     val canDownload: Boolean,
 )
 

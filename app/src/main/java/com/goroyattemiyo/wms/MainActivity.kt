@@ -1,6 +1,5 @@
 package com.goroyattemiyo.wms
 
-import android.app.Application
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -22,7 +21,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -414,7 +412,7 @@ private fun SearchThumbnail(url: String?, durationSeconds: Int?) {
                         connectTimeout = 5_000
                         readTimeout = 7_000
                     }
-                    connection.getInputStream().use(BitmapFactory::decodeStream)
+                    connection.getInputStream().use { BitmapFactory.decodeStream(it) }
                 }.getOrNull()
             }
         }

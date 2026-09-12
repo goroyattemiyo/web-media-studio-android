@@ -9,6 +9,7 @@ import android.content.Intent
 import android.os.IBinder
 import com.goroyattemiyo.wms.MainActivity
 import com.goroyattemiyo.wms.R
+import com.goroyattemiyo.wms.WmsApplication
 import com.yausername.youtubedl_android.YoutubeDL
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -52,6 +53,8 @@ class ManagedAcquisitionService : Service() {
             return
         }
         if (activeJob?.isActive == true) return
+
+        (application as? WmsApplication)?.requestNotificationPermissionForSave()
 
         activeSourceUrl = source
         cancelRequested = false

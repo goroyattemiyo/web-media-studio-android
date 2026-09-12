@@ -123,6 +123,12 @@ class MediaRepository internal constructor(
         mediaDao.updateLastPosition(id, positionMs.coerceAtLeast(0L))
     }
 
+    suspend fun rollbackRegistration(file: File) = withContext(Dispatchers.IO) {
+        requireManagedFile(file)
+        mediaDao.deleteByLocalPath(file.absolutePath)
+        file.delete()
+    }
+
     private fun requireManagedFile(file: File) {
         val rootPath = acquiredDirectory.canonicalFile.toPath()
         require(file.canonicalFile.toPath().startsWith(rootPath)) {

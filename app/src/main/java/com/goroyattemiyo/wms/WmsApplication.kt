@@ -10,6 +10,7 @@ import android.view.View
 import androidx.room.Room
 import com.goroyattemiyo.wms.library.MediaRepository
 import com.goroyattemiyo.wms.library.WmsDatabase
+import com.goroyattemiyo.wms.playlist.PlaylistRepository
 import java.lang.ref.WeakReference
 
 class WmsApplication : Application() {
@@ -20,11 +21,16 @@ class WmsApplication : Application() {
             applicationContext,
             WmsDatabase::class.java,
             "wms.db",
-        ).build()
+        ).addMigrations(WmsDatabase.MIGRATION_1_2)
+            .build()
     }
 
     val mediaRepository: MediaRepository by lazy {
         MediaRepository.create(applicationContext, database.mediaDao())
+    }
+
+    val playlistRepository: PlaylistRepository by lazy {
+        PlaylistRepository(database.playlistDao())
     }
 
     override fun onCreate() {

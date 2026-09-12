@@ -386,7 +386,7 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun acquireMp3() {
+    fun acquireMp3(playlistId: String? = null) {
         val snapshot = _uiState.value
         if (
             snapshot.url.isBlank() ||
@@ -417,6 +417,7 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
         val intent = Intent(app, ManagedAcquisitionService::class.java).apply {
             action = ManagedAcquisitionService.ACTION_START
             putExtra(ManagedAcquisitionService.EXTRA_SOURCE_URL, snapshot.url.trim())
+            playlistId?.let { putExtra(ManagedAcquisitionService.EXTRA_PLAYLIST_ID, it) }
         }
 
         runCatching {

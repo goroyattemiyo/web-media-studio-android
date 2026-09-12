@@ -129,6 +129,10 @@ private class FakeMediaDao : MediaDao {
         rows.value = rows.value.filterNot { it.id == id }
     }
 
+    override suspend fun deleteByLocalPath(localPath: String) {
+        rows.value = rows.value.filterNot { it.localPath == localPath }
+    }
+
     override suspend fun updateLastPosition(id: String, positionMs: Long) {
         rows.value = rows.value.map { if (it.id == id) it.copy(lastPositionMs = positionMs) else it }
     }

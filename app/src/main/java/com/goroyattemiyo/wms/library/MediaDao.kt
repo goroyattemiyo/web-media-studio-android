@@ -19,6 +19,9 @@ interface MediaDao {
     @Query("DELETE FROM media WHERE id = :id")
     suspend fun deleteById(id: String)
 
+    @Query("DELETE FROM media WHERE localPath = :localPath")
+    suspend fun deleteByLocalPath(localPath: String)
+
     @Query("UPDATE media SET lastPositionMs = :positionMs WHERE id = :id")
     suspend fun updateLastPosition(id: String, positionMs: Long)
 }

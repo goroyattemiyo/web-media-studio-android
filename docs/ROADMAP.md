@@ -144,6 +144,17 @@ Exit: acquired media survives app restart and remains playable.
 
 Exit: named playlists and order survive restart.
 
+Checkpoint on 2026-09-13 JST:
+
+- Room v2 schema and explicit v1-to-v2 migration implemented
+- playlist CRUD, ordered entries, import-time destination, active-queue persistence, and Previous/Next implemented
+- playlist repository ordering tests pass
+- local `testDebugUnitTest`, `lintDebug`, and `assembleDebug` pass
+- A4 APK installed over retained A3 app data without a migration crash
+- real-device playlist operations, restart/order persistence, ordered playback, and import-time addition remain to be verified
+
+**Gate A4: IN PROGRESS — implementation and local automation pass; real-device exit checks are pending.**
+
 ## Gate A5 — Native background playback + Now Playing
 
 - [ ] `MediaLibraryService`

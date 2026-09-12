@@ -23,6 +23,7 @@ class ManagedAcquisitionService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val engine by lazy { YoutubeDlAcquisitionEngine(applicationContext) }
     private val mediaRepository by lazy { (application as WmsApplication).mediaRepository }
+    private val playlistRepository by lazy { (application as WmsApplication).playlistRepository }
     private val notificationManager by lazy { getSystemService(NotificationManager::class.java) }
 
     private var activeJob: Job? = null
@@ -41,13 +42,16 @@ class ManagedAcquisitionService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_CANCEL -> cancelActiveJob()
-            ACTION_START -> startManagedJob(intent.getStringExtra(EXTRA_SOURCE_URL).orEmpty())
+            ACTION_START -> startManagedJob(
+                intent.getStringExtra(EXTRA_SOURCE_URL).orEmpty(),
+                intent.getStringExtra(EXTRA_PLAYLIST_ID),
+            )
             else -> stopSelf(startId)
         }
         return START_NOT_STICKY
     }
 
-    private fun startManagedJob(sourceUrl: String) {
+    private fun startManagedJob(sourceUrl: String, playlistId: String?) {
         val source = sourceUrl.trim()
         if (source.isBlank()) {
             stopSelf()
@@ -112,10 +116,11 @@ class ManagedAcquisitionService : Service() {
             val registeredResult = result.fold(
                 onSuccess = { acquisition ->
                     runCatching {
-                        mediaRepository.registerAcquisition(acquisition, source)
+                        val media = mediaRepository.registerAcquisition(acquisition, source)
+                        playlistId?.let { playlistRepository.addMedia(it, media.id) }
                         acquisition
                     }.onFailure {
-                        acquisition.file.delete()
+                        runCatching { mediaRepository.rollbackRegistration(acquisition.file) }
                     }
                 },
                 onFailure = { Result.failure(it) },
@@ -263,6 +268,7 @@ class ManagedAcquisitionService : Service() {
         const val ACTION_START = "com.goroyattemiyo.wms.action.START_ACQUISITION"
         const val ACTION_CANCEL = "com.goroyattemiyo.wms.action.CANCEL_ACQUISITION"
         const val EXTRA_SOURCE_URL = "source_url"
+        const val EXTRA_PLAYLIST_ID = "playlist_id"
 
         private const val CHANNEL_ID = "wms_acquisition"
         private const val NOTIFICATION_ID = 2101

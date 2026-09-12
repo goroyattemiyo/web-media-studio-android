@@ -534,6 +534,22 @@ create playlist
   -> play items in expected order
 ```
 
+Current Gate A4 checkpoint on 2026-09-13 JST:
+
+```text
+branch: feat/gate-a4-playlists
+status: IN PROGRESS — local automation PASS, device exit checks pending
+```
+
+Room schema v2 with an explicit v1-to-v2 migration, playlist CRUD, ordered entries,
+import-time playlist selection, persisted active-queue selection, and Previous/Next are
+implemented. Repository unit tests and local `testDebugUnitTest`, `lintDebug`, and
+`assembleDebug` pass. The APK installed over retained A3 data without a migration crash.
+
+On resume, unlock the target device and verify create/rename/delete, multiple-item add and
+reorder, restart persistence, ordered Previous/Next, and acquisition into the selected
+playlist. Do not mark Gate A4 LOCAL PASS until those device checks pass.
+
 ## Gate A5 target — Background playback / MediaSession / Now Playing
 
 After Gate A4 reaches LOCAL PASS, continue to Gate A5 if the architecture remains consistent with `docs/ARCHITECTURE.md`.

@@ -13,8 +13,8 @@ android {
         applicationId = "com.goroyattemiyo.wms"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "0.3.0-a3-local-library"
+        versionCode = 8
+        versionName = "0.4.0-a4-playlists"
 
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")

@@ -70,6 +70,9 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.goroyattemiyo.wms.search.SearchMediaItem
 import com.goroyattemiyo.wms.library.LibraryViewModel
 import com.goroyattemiyo.wms.library.MediaEntity
+import com.goroyattemiyo.wms.playlist.PlaylistMediaItem
+import com.goroyattemiyo.wms.playlist.PlaylistSummary
+import com.goroyattemiyo.wms.playlist.PlaylistViewModel
 import java.io.File
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
@@ -79,6 +82,7 @@ import kotlinx.coroutines.withContext
 class MainActivity : ComponentActivity() {
     private val acquisitionViewModel by viewModels<GateA0ViewModel>()
     private val libraryViewModel by viewModels<LibraryViewModel>()
+    private val playlistViewModel by viewModels<PlaylistViewModel>()
     private val searchViewModel by viewModels<SearchViewModel>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -86,7 +90,7 @@ class MainActivity : ComponentActivity() {
         consumeShareIntent(intent)
         setContent {
             WmsTheme {
-                WmsRoot(acquisitionViewModel, searchViewModel, libraryViewModel)
+                WmsRoot(acquisitionViewModel, searchViewModel, libraryViewModel, playlistViewModel)
             }
         }
     }
@@ -109,20 +113,33 @@ private fun WmsRoot(
     acquisitionViewModel: GateA0ViewModel,
     searchViewModel: SearchViewModel,
     libraryViewModel: LibraryViewModel,
+    playlistViewModel: PlaylistViewModel,
 ) {
     val acquisitionState by acquisitionViewModel.uiState.collectAsStateWithLifecycle()
     val searchState by searchViewModel.uiState.collectAsStateWithLifecycle()
     val libraryMedia by libraryViewModel.media.collectAsStateWithLifecycle()
     val selectedMediaId by libraryViewModel.selectedMediaId.collectAsStateWithLifecycle()
     val libraryError by libraryViewModel.errorMessage.collectAsStateWithLifecycle()
+    val playlists by playlistViewModel.playlists.collectAsStateWithLifecycle()
+    val selectedPlaylistId by playlistViewModel.selectedPlaylistId.collectAsStateWithLifecycle()
+    val playlistItems by playlistViewModel.selectedItems.collectAsStateWithLifecycle()
+    val playlistError by playlistViewModel.errorMessage.collectAsStateWithLifecycle()
     var searchText by remember { mutableStateOf("") }
     var importOpen by remember { mutableStateOf(false) }
     var developerOpen by remember { mutableStateOf(false) }
     var playRequest by remember { mutableIntStateOf(0) }
     var selectedTab by remember { mutableStateOf(AppTab.SEARCH) }
+    var importPlaylistId by remember { mutableStateOf<String?>(null) }
 
     val selectedMedia = libraryMedia.firstOrNull { it.id == selectedMediaId }
         ?: libraryMedia.firstOrNull()
+    val activeQueueIndex = playlistItems.indexOfFirst { it.media.id == selectedMedia?.id }
+
+    LaunchedEffect(playlists, importPlaylistId) {
+        if (importPlaylistId != null && playlists.none { it.id == importPlaylistId }) {
+            importPlaylistId = null
+        }
+    }
 
     LaunchedEffect(acquisitionState.savedPath, libraryMedia) {
         acquisitionState.savedPath?.let { savedPath ->
@@ -177,11 +194,32 @@ private fun WmsRoot(
                         selectedMediaId = selectedMedia?.id,
                         errorMessage = libraryError,
                         onPlay = { media ->
+                            playlistViewModel.selectPlaylist(null)
                             libraryViewModel.select(media)
                             playRequest += 1
                         },
                         onDelete = libraryViewModel::delete,
                         onClearError = libraryViewModel::clearError,
+                    )
+                    AppTab.PLAYLIST -> PlaylistScreen(
+                        playlists = playlists,
+                        selectedPlaylistId = selectedPlaylistId,
+                        items = playlistItems,
+                        libraryMedia = libraryMedia,
+                        selectedMediaId = selectedMedia?.id,
+                        errorMessage = playlistError,
+                        onSelectPlaylist = playlistViewModel::selectPlaylist,
+                        onCreate = playlistViewModel::create,
+                        onRename = playlistViewModel::rename,
+                        onDelete = playlistViewModel::delete,
+                        onAddMedia = playlistViewModel::addMedia,
+                        onRemoveMedia = playlistViewModel::removeMedia,
+                        onMoveMedia = playlistViewModel::moveMedia,
+                        onPlay = { media ->
+                            libraryViewModel.select(media)
+                            playRequest += 1
+                        },
+                        onClearError = playlistViewModel::clearError,
                     )
                 }
             }
@@ -195,6 +233,20 @@ private fun WmsRoot(
                     onPositionChanged = { positionMs ->
                         libraryViewModel.savePosition(media.id, positionMs)
                     },
+                    hasPrevious = activeQueueIndex > 0,
+                    hasNext = activeQueueIndex >= 0 && activeQueueIndex < playlistItems.lastIndex,
+                    onPrevious = {
+                        playlistItems.getOrNull(activeQueueIndex - 1)?.media?.let {
+                            libraryViewModel.select(it)
+                            playRequest += 1
+                        }
+                    },
+                    onNext = {
+                        playlistItems.getOrNull(activeQueueIndex + 1)?.media?.let {
+                            libraryViewModel.select(it)
+                            playRequest += 1
+                        }
+                    },
                 )
             }
             BottomNavigation(
@@ -207,9 +259,12 @@ private fun WmsRoot(
     if (importOpen && acquisitionState.url.isNotBlank()) {
         ImportSheet(
             state = acquisitionState,
+            playlists = playlists,
+            selectedPlaylistId = importPlaylistId,
             onDismiss = { importOpen = false },
+            onPlaylistSelected = { importPlaylistId = it },
             onRightsChanged = acquisitionViewModel::setRightsConfirmed,
-            onSave = acquisitionViewModel::acquireMp3,
+            onSave = { acquisitionViewModel.acquireMp3(importPlaylistId) },
             onCancel = acquisitionViewModel::cancelAcquisition,
             onUpdateYoutubeDl = acquisitionViewModel::updateYoutubeDl,
             onDiagnostics = acquisitionViewModel::runDiagnostics,
@@ -506,7 +561,10 @@ private fun DeveloperStatusCard(state: GateA0UiState) {
 @Composable
 private fun ImportSheet(
     state: GateA0UiState,
+    playlists: List<PlaylistSummary>,
+    selectedPlaylistId: String?,
     onDismiss: () -> Unit,
+    onPlaylistSelected: (String?) -> Unit,
     onRightsChanged: (Boolean) -> Unit,
     onSave: () -> Unit,
     onCancel: () -> Unit,
@@ -570,6 +628,25 @@ private fun ImportSheet(
                     "このメディアを保存する権利・許可を確認しました",
                     modifier = Modifier.padding(top = 12.dp),
                 )
+            }
+
+            if (playlists.isNotEmpty()) {
+                Text("追加先プレイリスト（任意）", fontWeight = FontWeight.Bold)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(onClick = { onPlaylistSelected(null) }) {
+                        Text(if (selectedPlaylistId == null) "✓ 指定なし" else "指定なし")
+                    }
+                    playlists.forEach { playlist ->
+                        OutlinedButton(onClick = { onPlaylistSelected(playlist.id) }) {
+                            Text(if (selectedPlaylistId == playlist.id) "✓ ${playlist.name}" else playlist.name)
+                        }
+                    }
+                }
             }
 
             Button(
@@ -676,6 +753,7 @@ private fun ImportSheet(
 private enum class AppTab {
     SEARCH,
     LIBRARY,
+    PLAYLIST,
 }
 
 @Composable
@@ -796,12 +874,250 @@ private fun LibraryScreen(
 }
 
 @Composable
+private fun PlaylistScreen(
+    playlists: List<PlaylistSummary>,
+    selectedPlaylistId: String?,
+    items: List<PlaylistMediaItem>,
+    libraryMedia: List<MediaEntity>,
+    selectedMediaId: String?,
+    errorMessage: String?,
+    onSelectPlaylist: (String) -> Unit,
+    onCreate: (String) -> Unit,
+    onRename: (String, String) -> Unit,
+    onDelete: (String) -> Unit,
+    onAddMedia: (String, String) -> Unit,
+    onRemoveMedia: (String, String) -> Unit,
+    onMoveMedia: (String, String, Int) -> Unit,
+    onPlay: (MediaEntity) -> Unit,
+    onClearError: () -> Unit,
+) {
+    var createDialogOpen by remember { mutableStateOf(false) }
+    var renaming by remember { mutableStateOf<PlaylistSummary?>(null) }
+    var deleting by remember { mutableStateOf<PlaylistSummary?>(null) }
+    val selectedPlaylist = playlists.firstOrNull { it.id == selectedPlaylistId }
+    val mediaIds = items.mapTo(mutableSetOf()) { it.media.id }
+
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Playlist", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                Button(onClick = { createDialogOpen = true }) { Text("新規作成") }
+            }
+
+            errorMessage?.let { message ->
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(message, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.error)
+                        TextButton(onClick = onClearError) { Text("閉じる") }
+                    }
+                }
+            }
+
+            if (playlists.isEmpty()) {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        "プレイリストを作成すると、保存済みメディアを好きな順序で再生できます。",
+                        modifier = Modifier.padding(18.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else {
+                Text("プレイリスト", fontWeight = FontWeight.Bold)
+                playlists.forEach { playlist ->
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            TextButton(
+                                onClick = { onSelectPlaylist(playlist.id) },
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(
+                                    buildString {
+                                        if (playlist.id == selectedPlaylistId) append("✓ ")
+                                        append(playlist.name)
+                                        append(" (${playlist.itemCount})")
+                                    },
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            TextButton(onClick = { renaming = playlist }) { Text("名前") }
+                            TextButton(onClick = { deleting = playlist }) { Text("削除") }
+                        }
+                    }
+                }
+            }
+
+            selectedPlaylist?.let { playlist ->
+                Text("「${playlist.name}」の再生順", fontWeight = FontWeight.Bold)
+                if (items.isEmpty()) {
+                    Text("まだ項目がありません。Libraryから追加してください。")
+                }
+                items.forEachIndexed { index, item ->
+                    val available = File(item.media.localPath).let { it.exists() && it.length() > 0L }
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                "${index + 1}. ${item.media.title}",
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (item.media.id == selectedMediaId) {
+                                Text(
+                                    "Mini Playerで選択中",
+                                    color = MaterialTheme.colorScheme.primary,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Button(onClick = { onPlay(item.media) }, enabled = available) { Text("再生") }
+                                OutlinedButton(
+                                    onClick = { onMoveMedia(playlist.id, item.media.id, -1) },
+                                    enabled = index > 0,
+                                ) { Text("↑") }
+                                OutlinedButton(
+                                    onClick = { onMoveMedia(playlist.id, item.media.id, 1) },
+                                    enabled = index < items.lastIndex,
+                                ) { Text("↓") }
+                                TextButton(onClick = { onRemoveMedia(playlist.id, item.media.id) }) {
+                                    Text("外す")
+                                }
+                            }
+                        }
+                    }
+                }
+
+                val availableToAdd = libraryMedia.filterNot { it.id in mediaIds }
+                Text("Libraryから追加", fontWeight = FontWeight.Bold)
+                if (availableToAdd.isEmpty()) {
+                    Text(
+                        "追加できる保存済みメディアはありません。",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                availableToAdd.forEach { media ->
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Text(
+                                media.title,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            OutlinedButton(onClick = { onAddMedia(playlist.id, media.id) }) {
+                                Text("追加")
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+
+    if (createDialogOpen) {
+        PlaylistNameDialog(
+            title = "プレイリストを作成",
+            initialName = "",
+            onDismiss = { createDialogOpen = false },
+            onConfirm = {
+                createDialogOpen = false
+                onCreate(it)
+            },
+        )
+    }
+    renaming?.let { playlist ->
+        PlaylistNameDialog(
+            title = "名前を変更",
+            initialName = playlist.name,
+            onDismiss = { renaming = null },
+            onConfirm = {
+                renaming = null
+                onRename(playlist.id, it)
+            },
+        )
+    }
+    deleting?.let { playlist ->
+        AlertDialog(
+            onDismissRequest = { deleting = null },
+            title = { Text("プレイリストを削除") },
+            text = { Text("「${playlist.name}」を削除します。Library内のメディアは残ります。") },
+            confirmButton = {
+                Button(onClick = {
+                    deleting = null
+                    onDelete(playlist.id)
+                }) { Text("削除") }
+            },
+            dismissButton = { TextButton(onClick = { deleting = null }) { Text("戻る") } },
+        )
+    }
+}
+
+@Composable
+private fun PlaylistNameDialog(
+    title: String,
+    initialName: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit,
+) {
+    var name by remember(initialName) { mutableStateOf(initialName) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { if (it.length <= 80) name = it },
+                label = { Text("名前") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+        confirmButton = {
+            Button(onClick = { onConfirm(name.trim()) }, enabled = name.isNotBlank()) { Text("保存") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("戻る") } },
+    )
+}
+
+@Composable
 private fun SavedMiniPlayer(
     path: String,
     title: String,
     playRequest: Int,
     initialPositionMs: Long,
     onPositionChanged: (Long) -> Unit,
+    hasPrevious: Boolean,
+    hasNext: Boolean,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
 ) {
     val context = LocalContext.current
     val player = remember { ExoPlayer.Builder(context).build() }
@@ -1025,6 +1341,25 @@ private fun SavedMiniPlayer(
                     Text("+10秒")
                 }
             }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(
+                    onClick = onPrevious,
+                    modifier = Modifier.weight(1f),
+                    enabled = hasPrevious,
+                ) {
+                    Text("前へ")
+                }
+                OutlinedButton(
+                    onClick = onNext,
+                    modifier = Modifier.weight(1f),
+                    enabled = hasNext,
+                ) {
+                    Text("次へ")
+                }
+            }
         }
     }
 }
@@ -1054,7 +1389,12 @@ private fun BottomNavigation(
             ) {
                 Text("Library")
             }
-            TextButton(onClick = { }, enabled = false) { Text("Playlist") }
+            TextButton(
+                onClick = { onSelect(AppTab.PLAYLIST) },
+                enabled = selectedTab != AppTab.PLAYLIST,
+            ) {
+                Text("Playlist")
+            }
         }
     }
 }

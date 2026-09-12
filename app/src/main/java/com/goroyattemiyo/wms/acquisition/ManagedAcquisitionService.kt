@@ -200,6 +200,7 @@ class ManagedAcquisitionService : Service() {
             .setSmallIcon(R.drawable.wms_emblem)
             .setContentTitle("WMS 保存中")
             .setContentText(message)
+            .setContentIntent(openWmsPendingIntent())
             .setOnlyAlertOnce(true)
             .setOngoing(true)
             .setProgress(100, percent.coerceIn(0, 100), percent <= 0)
@@ -213,24 +214,28 @@ class ManagedAcquisitionService : Service() {
             .build()
     }
 
-    private fun terminalNotification(title: String, message: String): Notification {
+    private fun terminalNotification(title: String, message: String): Notification =
+        Notification.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.wms_emblem)
+            .setContentTitle(title)
+            .setContentText(message.take(120))
+            .setContentIntent(openWmsPendingIntent())
+            .setAutoCancel(true)
+            .build()
+
+    private fun openWmsPendingIntent(): PendingIntent {
         val openIntent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            // MainActivity uses the default launch mode. CLEAR_TOP without SINGLE_TOP
+            // recreates it, so a fresh ViewModel reconnects to ManagedAcquisitionBus
+            // and the existing URL/state reopens the Import Sheet deterministically.
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
-        val openPendingIntent = PendingIntent.getActivity(
+        return PendingIntent.getActivity(
             this,
             REQUEST_OPEN,
             openIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-
-        return Notification.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.wms_emblem)
-            .setContentTitle(title)
-            .setContentText(message.take(120))
-            .setContentIntent(openPendingIntent)
-            .setAutoCancel(true)
-            .build()
     }
 
     companion object {

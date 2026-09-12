@@ -54,6 +54,7 @@ class ManagedAcquisitionService : Service() {
         }
         if (activeJob?.isActive == true) return
 
+        engine.prepareForAcquisition()
         (application as? WmsApplication)?.requestNotificationPermissionForSave()
 
         activeSourceUrl = source

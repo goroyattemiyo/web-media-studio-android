@@ -33,6 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -42,6 +43,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -56,8 +58,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
@@ -65,6 +69,7 @@ import com.goroyattemiyo.wms.search.SearchMediaItem
 import java.io.File
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
@@ -651,8 +656,13 @@ private fun ImportSheet(
 private fun SavedMiniPlayer(path: String, title: String, playRequest: Int) {
     val context = LocalContext.current
     val player = remember { ExoPlayer.Builder(context).build() }
+    val fileAvailable = remember(path) { File(path).let { it.exists() && it.length() > 0L } }
     var isPlaying by remember { mutableStateOf(false) }
-    var ready by remember { mutableStateOf(false) }
+    var playbackState by remember { mutableIntStateOf(Player.STATE_IDLE) }
+    var positionMs by remember { mutableLongStateOf(0L) }
+    var durationMs by remember { mutableLongStateOf(0L) }
+    var isSeeking by remember { mutableStateOf(false) }
+    var seekFraction by remember { mutableStateOf(0f) }
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
@@ -660,8 +670,8 @@ private fun SavedMiniPlayer(path: String, title: String, playRequest: Int) {
                 isPlaying = playing
             }
 
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                ready = playbackState == Player.STATE_READY
+            override fun onPlaybackStateChanged(state: Int) {
+                playbackState = state
             }
         }
         player.addListener(listener)
@@ -675,11 +685,48 @@ private fun SavedMiniPlayer(path: String, title: String, playRequest: Int) {
         val file = File(path)
         player.stop()
         player.clearMediaItems()
-        ready = false
+        playbackState = Player.STATE_IDLE
+        positionMs = 0L
+        durationMs = 0L
+        isSeeking = false
         if (file.exists() && file.length() > 0L) {
             player.setMediaItem(MediaItem.fromUri(Uri.fromFile(file)))
             player.prepare()
         }
+    }
+
+    LaunchedEffect(player, path) {
+        while (true) {
+            val knownDuration = player.duration
+            durationMs = if (knownDuration == C.TIME_UNSET || knownDuration < 0L) {
+                0L
+            } else {
+                knownDuration
+            }
+            if (!isSeeking) {
+                positionMs = player.currentPosition.coerceIn(0L, durationMs.coerceAtLeast(0L))
+            }
+            delay(if (player.isPlaying) 250L else 750L)
+        }
+    }
+
+    val displayedPositionMs = if (isSeeking && durationMs > 0L) {
+        (seekFraction * durationMs).toLong()
+    } else {
+        positionMs
+    }
+    val displayedFraction = when {
+        durationMs <= 0L -> 0f
+        isSeeking -> seekFraction
+        else -> (positionMs.toDouble() / durationMs.toDouble()).toFloat().coerceIn(0f, 1f)
+    }
+    val statusText = when {
+        !fileAvailable -> "Local · ファイルを開けません"
+        playbackState == Player.STATE_BUFFERING -> "Local · 読み込み中"
+        playbackState == Player.STATE_READY && isPlaying -> "Local · 再生中"
+        playbackState == Player.STATE_READY -> "Local · 一時停止"
+        playbackState == Player.STATE_ENDED -> "Local · 再生完了"
+        else -> "Local · 準備中"
     }
 
     LaunchedEffect(playRequest, path) {
@@ -722,23 +769,94 @@ private fun SavedMiniPlayer(path: String, title: String, playRequest: Int) {
                         modifier = Modifier.size(42.dp),
                     )
                 }
-                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(title, fontWeight = FontWeight.Bold)
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
                     Text(
-                        if (ready) "Local · 再生準備OK" else "Local · 準備中",
+                        text = title,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        statusText,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
             }
-            Button(
-                onClick = {
-                    if (player.isPlaying) player.pause() else player.play()
+
+            Slider(
+                value = displayedFraction,
+                onValueChange = {
+                    isSeeking = true
+                    seekFraction = it
+                },
+                onValueChangeFinished = {
+                    val targetMs = (seekFraction * durationMs).toLong().coerceIn(0L, durationMs)
+                    player.seekTo(targetMs)
+                    positionMs = targetMs
+                    isSeeking = false
                 },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = File(path).exists(),
+                enabled = fileAvailable && durationMs > 0L,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text(if (isPlaying) "Pause" else "Play")
+                Text(
+                    formatPlaybackTime(displayedPositionMs),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    formatPlaybackTime(durationMs),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        val targetMs = (player.currentPosition - 10_000L).coerceAtLeast(0L)
+                        player.seekTo(targetMs)
+                        positionMs = targetMs
+                    },
+                    modifier = Modifier.weight(1f),
+                    enabled = fileAvailable && durationMs > 0L,
+                ) {
+                    Text("−10秒")
+                }
+                Button(
+                    onClick = {
+                        if (player.isPlaying) {
+                            player.pause()
+                        } else {
+                            if (player.playbackState == Player.STATE_ENDED) player.seekTo(0L)
+                            player.play()
+                        }
+                    },
+                    modifier = Modifier.weight(1.4f),
+                    enabled = fileAvailable,
+                ) {
+                    Text(if (isPlaying) "一時停止" else "再生")
+                }
+                OutlinedButton(
+                    onClick = {
+                        val targetMs = (player.currentPosition + 10_000L).coerceAtMost(durationMs)
+                        player.seekTo(targetMs)
+                        positionMs = targetMs
+                    },
+                    modifier = Modifier.weight(1f),
+                    enabled = fileAvailable && durationMs > 0L,
+                ) {
+                    Text("+10秒")
+                }
             }
         }
     }
@@ -772,6 +890,9 @@ private fun formatDuration(totalSeconds: Int): String {
         "%d:%02d".format(minutes, remainder)
     }
 }
+
+private fun formatPlaybackTime(milliseconds: Long): String =
+    formatDuration((milliseconds.coerceAtLeast(0L) / 1_000L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
 
 private val WmsDarkColors = darkColorScheme(
     primary = Color(0xFF57D8FF),

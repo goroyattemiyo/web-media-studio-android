@@ -68,12 +68,12 @@ Exit: normal launch looks like WMS Media Search, shared/pasted URL reliably reac
 
 **Gate A1: PASS — verified on the target Android device on 2026-09-12 JST**
 
-Non-blocking post-Gate-A1 quality items:
+Post-Gate-A1 quality status:
 
-- fix Search Home top inset so `Find media` does not overlap the Android status bar
-- narrow-device / screen-rotation layout polish
-- observe automatic yt-dlp stable refresh after the 24-hour check window
-- continue adaptive icon visual parity work if needed
+- [x] Search Home system-bar safe area so scrolling content no longer overlaps Android status/navigation bars
+- [ ] narrow-device / screen-rotation layout polish
+- [ ] observe automatic yt-dlp stable refresh after the 24-hour check window
+- [ ] continue adaptive icon visual parity work if needed
 
 ## Gate A2 — Managed acquisition jobs
 
@@ -84,6 +84,20 @@ Non-blocking post-Gate-A1 quality items:
 - [ ] temporary job directory
 - [ ] atomic success registration
 - [ ] failed/cancelled cleanup
+
+Implementation status on Draft PR #5:
+
+- foreground `dataSync` Service implemented
+- one-active-job guard implemented
+- progress / success / failure notification paths implemented
+- UI and notification cancellation paths implemented
+- Activity/ViewModel recreation restores managed job state
+- yt-dlp Search/update/acquisition serialization implemented
+- temporary per-job cache directory already cleaned in `finally`
+- managed acquisition state-transition unit tests added
+- real-device checklist added at `docs/GATE_A2_DEVICE_CHECK.md`
+
+The checkboxes above remain intentionally open until CI and target-device verification pass.
 
 Exit: an acquisition survives leaving the Activity and remains controllable.
 
@@ -166,6 +180,14 @@ Search support and acquisition support are separate capabilities. Never mark a p
 - [ ] optional private GitHub Release APK
 - [ ] documented rollback/version procedure
 
+Actions usage policy from Gate A2 onward:
+
+- Gate work stays in Draft PRs without automatic Android CI on every commit
+- mark Ready once when a Gate is code-complete to trigger the full Android CI
+- no automatic duplicate build after squash merge to `main`
+- debug APK artifact retention is 1 day
+- keep only the newest two WMS Android APK artifacts
+
 No Play Store work in the current plan.
 
 ## Canonical WMS appearance IDs
@@ -182,4 +204,6 @@ Visualizer modes:
 
 ## Current priority
 
-**Close PR #3 and merge Gate A1 to `main`.** After merge, start Gate A2 from `main`. Persistent Local Library remains Gate A3, with the top-inset visual bug tracked as a small non-blocking quality fix.
+**Gate A2 / Draft PR #5.** Finish managed-acquisition code and tests without triggering repeated CI. When Actions/storage accounting is available again, mark PR #5 Ready once, produce one Gate A2 APK, run `docs/GATE_A2_DEVICE_CHECK.md`, and squash merge only after target-device PASS.
+
+Persistent Local Library remains Gate A3.

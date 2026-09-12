@@ -7,10 +7,25 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.view.View
+import androidx.room.Room
+import com.goroyattemiyo.wms.library.MediaRepository
+import com.goroyattemiyo.wms.library.WmsDatabase
 import java.lang.ref.WeakReference
 
 class WmsApplication : Application() {
     private var resumedActivity = WeakReference<Activity>(null)
+
+    val database: WmsDatabase by lazy {
+        Room.databaseBuilder(
+            applicationContext,
+            WmsDatabase::class.java,
+            "wms.db",
+        ).build()
+    }
+
+    val mediaRepository: MediaRepository by lazy {
+        MediaRepository.create(applicationContext, database.mediaDao())
+    }
 
     override fun onCreate() {
         super.onCreate()

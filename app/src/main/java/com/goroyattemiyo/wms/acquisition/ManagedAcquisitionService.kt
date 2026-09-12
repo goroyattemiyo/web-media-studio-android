@@ -22,6 +22,7 @@ import kotlinx.coroutines.runBlocking
 class ManagedAcquisitionService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val engine by lazy { YoutubeDlAcquisitionEngine(applicationContext) }
+    private val mediaRepository by lazy { (application as WmsApplication).mediaRepository }
     private val notificationManager by lazy { getSystemService(NotificationManager::class.java) }
 
     private var activeJob: Job? = null
@@ -108,7 +109,19 @@ class ManagedAcquisitionService : Service() {
 
             if (cancelRequested) return@launch
 
-            result.onSuccess { acquisition ->
+            val registeredResult = result.fold(
+                onSuccess = { acquisition ->
+                    runCatching {
+                        mediaRepository.registerAcquisition(acquisition, source)
+                        acquisition
+                    }.onFailure {
+                        acquisition.file.delete()
+                    }
+                },
+                onFailure = { Result.failure(it) },
+            )
+
+            registeredResult.onSuccess { acquisition ->
                 ManagedAcquisitionBus.succeeded(acquisition)
                 activeJob = null
                 activeSourceUrl = ""
@@ -123,8 +136,16 @@ class ManagedAcquisitionService : Service() {
                 stopSelf()
             }.onFailure { error ->
                 val engineError = error as? AcquisitionEngineException
-                val code = engineError?.code ?: "ACQUIRE_FAILED"
-                val message = engineError?.message ?: "メディアの保存に失敗しました。"
+                val code = engineError?.code ?: if (result.isSuccess) {
+                    "LIBRARY_REGISTER_FAILED"
+                } else {
+                    "ACQUIRE_FAILED"
+                }
+                val message = engineError?.message ?: if (result.isSuccess) {
+                    "保存したメディアをライブラリへ登録できませんでした。"
+                } else {
+                    "メディアの保存に失敗しました。"
+                }
                 ManagedAcquisitionBus.failed(source, code, message)
                 activeJob = null
                 activeSourceUrl = ""

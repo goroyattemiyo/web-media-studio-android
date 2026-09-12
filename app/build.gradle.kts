@@ -1,5 +1,6 @@
 plugins {
     id("com.android.application")
+    id("com.google.devtools.ksp")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
@@ -12,8 +13,8 @@ android {
         applicationId = "com.goroyattemiyo.wms"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "0.2.0-a2-managed-acquisition"
+        versionCode = 7
+        versionName = "0.3.0-a3-local-library"
 
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
@@ -58,6 +59,10 @@ android {
     }
 }
 
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.compose.foundation:foundation:1.10.6")
@@ -72,6 +77,11 @@ dependencies {
 
     implementation("androidx.media3:media3-exoplayer:1.9.3")
 
+    val room = "2.8.5"
+    implementation("androidx.room:room-runtime:$room")
+    implementation("androidx.room:room-ktx:$room")
+    ksp("androidx.room:room-compiler:$room")
+
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
     val youtubeDlAndroid = "0.18.1"
@@ -79,4 +89,5 @@ dependencies {
     implementation("io.github.junkfood02.youtubedl-android:ffmpeg:$youtubeDlAndroid")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
 }

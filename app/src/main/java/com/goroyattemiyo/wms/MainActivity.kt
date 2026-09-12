@@ -26,6 +26,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -67,6 +68,8 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.goroyattemiyo.wms.search.SearchMediaItem
+import com.goroyattemiyo.wms.library.LibraryViewModel
+import com.goroyattemiyo.wms.library.MediaEntity
 import java.io.File
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
@@ -75,6 +78,7 @@ import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     private val acquisitionViewModel by viewModels<GateA0ViewModel>()
+    private val libraryViewModel by viewModels<LibraryViewModel>()
     private val searchViewModel by viewModels<SearchViewModel>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -82,7 +86,7 @@ class MainActivity : ComponentActivity() {
         consumeShareIntent(intent)
         setContent {
             WmsTheme {
-                WmsRoot(acquisitionViewModel, searchViewModel)
+                WmsRoot(acquisitionViewModel, searchViewModel, libraryViewModel)
             }
         }
     }
@@ -104,20 +108,25 @@ class MainActivity : ComponentActivity() {
 private fun WmsRoot(
     acquisitionViewModel: GateA0ViewModel,
     searchViewModel: SearchViewModel,
+    libraryViewModel: LibraryViewModel,
 ) {
     val acquisitionState by acquisitionViewModel.uiState.collectAsStateWithLifecycle()
     val searchState by searchViewModel.uiState.collectAsStateWithLifecycle()
+    val libraryMedia by libraryViewModel.media.collectAsStateWithLifecycle()
+    val selectedMediaId by libraryViewModel.selectedMediaId.collectAsStateWithLifecycle()
+    val libraryError by libraryViewModel.errorMessage.collectAsStateWithLifecycle()
     var searchText by remember { mutableStateOf("") }
     var importOpen by remember { mutableStateOf(false) }
     var developerOpen by remember { mutableStateOf(false) }
-    var latestSavedPath by remember { mutableStateOf<String?>(null) }
-    var latestSavedTitle by remember { mutableStateOf<String?>(null) }
     var playRequest by remember { mutableIntStateOf(0) }
+    var selectedTab by remember { mutableStateOf(AppTab.SEARCH) }
 
-    LaunchedEffect(acquisitionState.savedPath, acquisitionState.savedTitle) {
-        acquisitionState.savedPath?.let {
-            latestSavedPath = it
-            latestSavedTitle = acquisitionState.savedTitle
+    val selectedMedia = libraryMedia.firstOrNull { it.id == selectedMediaId }
+        ?: libraryMedia.firstOrNull()
+
+    LaunchedEffect(acquisitionState.savedPath, libraryMedia) {
+        acquisitionState.savedPath?.let { savedPath ->
+            libraryViewModel.selectByPath(savedPath)
         }
     }
 
@@ -130,35 +139,70 @@ private fun WmsRoot(
         }
     }
 
-    SearchHome(
-        acquisitionState = acquisitionState,
-        searchState = searchState,
-        searchText = searchText,
-        latestSavedPath = latestSavedPath,
-        latestSavedTitle = latestSavedTitle,
-        playRequest = playRequest,
-        onSearchTextChanged = {
-            searchText = it
-            searchViewModel.clearError()
-        },
-        onSubmit = {
-            val value = searchText.trim()
-            if (value.isNotBlank()) {
-                if (isDirectUrl(value)) {
-                    acquisitionViewModel.onUrlChanged(value)
-                    importOpen = true
-                } else {
-                    searchViewModel.search(value)
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background,
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Box(modifier = Modifier.weight(1f)) {
+                when (selectedTab) {
+                    AppTab.SEARCH -> SearchHome(
+                        acquisitionState = acquisitionState,
+                        searchState = searchState,
+                        searchText = searchText,
+                        onSearchTextChanged = {
+                            searchText = it
+                            searchViewModel.clearError()
+                        },
+                        onSubmit = {
+                            val value = searchText.trim()
+                            if (value.isNotBlank()) {
+                                if (isDirectUrl(value)) {
+                                    acquisitionViewModel.onUrlChanged(value)
+                                    importOpen = true
+                                } else {
+                                    searchViewModel.search(value)
+                                }
+                            }
+                        },
+                        onImportResult = { item ->
+                            acquisitionViewModel.onUrlChanged(item.url)
+                            importOpen = true
+                        },
+                        onOpenDeveloper = { developerOpen = !developerOpen },
+                        developerOpen = developerOpen,
+                    )
+                    AppTab.LIBRARY -> LibraryScreen(
+                        media = libraryMedia,
+                        selectedMediaId = selectedMedia?.id,
+                        errorMessage = libraryError,
+                        onPlay = { media ->
+                            libraryViewModel.select(media)
+                            playRequest += 1
+                        },
+                        onDelete = libraryViewModel::delete,
+                        onClearError = libraryViewModel::clearError,
+                    )
                 }
             }
-        },
-        onImportResult = { item ->
-            acquisitionViewModel.onUrlChanged(item.url)
-            importOpen = true
-        },
-        onOpenDeveloper = { developerOpen = !developerOpen },
-        developerOpen = developerOpen,
-    )
+
+            selectedMedia?.let { media ->
+                SavedMiniPlayer(
+                    path = media.localPath,
+                    title = media.title,
+                    playRequest = playRequest,
+                    initialPositionMs = media.lastPositionMs,
+                    onPositionChanged = { positionMs ->
+                        libraryViewModel.savePosition(media.id, positionMs)
+                    },
+                )
+            }
+            BottomNavigation(
+                selectedTab = selectedTab,
+                onSelect = { selectedTab = it },
+            )
+        }
+    }
 
     if (importOpen && acquisitionState.url.isNotBlank()) {
         ImportSheet(
@@ -182,9 +226,6 @@ private fun SearchHome(
     acquisitionState: GateA0UiState,
     searchState: SearchUiState,
     searchText: String,
-    latestSavedPath: String?,
-    latestSavedTitle: String?,
-    playRequest: Int,
     onSearchTextChanged: (String) -> Unit,
     onSubmit: () -> Unit,
     onImportResult: (SearchMediaItem) -> Unit,
@@ -297,27 +338,6 @@ private fun SearchHome(
                 }
             }
 
-            Text(
-                text = "最近追加したメディア",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-            )
-            if (latestSavedPath != null) {
-                SavedMiniPlayer(
-                    path = latestSavedPath,
-                    title = latestSavedTitle ?: "保存済み音声",
-                    playRequest = playRequest,
-                )
-            } else {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = "まだ保存されたメディアはありません。",
-                        modifier = Modifier.padding(18.dp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
             if (searchState.results.isNotEmpty()) {
                 Text(
                     text = "検索結果 · ${searchState.results.size}",
@@ -347,7 +367,6 @@ private fun SearchHome(
                 DeveloperStatusCard(acquisitionState)
             }
 
-            BottomNavigationPreview()
             Spacer(Modifier.height(8.dp))
         }
     }
@@ -654,8 +673,136 @@ private fun ImportSheet(
     }
 }
 
+private enum class AppTab {
+    SEARCH,
+    LIBRARY,
+}
+
 @Composable
-private fun SavedMiniPlayer(path: String, title: String, playRequest: Int) {
+private fun LibraryScreen(
+    media: List<MediaEntity>,
+    selectedMediaId: String?,
+    errorMessage: String?,
+    onPlay: (MediaEntity) -> Unit,
+    onDelete: (MediaEntity) -> Unit,
+    onClearError: () -> Unit,
+) {
+    var pendingDelete by remember { mutableStateOf<MediaEntity?>(null) }
+
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text("Library", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text(
+                "WMSに保存したメディアは端末内で管理されます。",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            errorMessage?.let { message ->
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(message, color = MaterialTheme.colorScheme.error)
+                        TextButton(onClick = onClearError) { Text("閉じる") }
+                    }
+                }
+            }
+
+            if (media.isEmpty()) {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        "保存済みメディアはありません。検索からWMSへ追加してください。",
+                        modifier = Modifier.padding(18.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            media.forEach { item ->
+                val available = File(item.localPath).let { it.exists() && it.length() > 0L }
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            item.title,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            buildString {
+                                append(item.provider)
+                                if (item.durationMs > 0L) append(" · ${formatPlaybackTime(item.durationMs)}")
+                                append(" · ${formatFileSize(item.fileSize)}")
+                            },
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        when {
+                            !available -> Text(
+                                "ファイルが見つかりません",
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            item.id == selectedMediaId -> Text(
+                                "Mini Playerで選択中",
+                                color = MaterialTheme.colorScheme.primary,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { onPlay(item) }, enabled = available) { Text("再生") }
+                            OutlinedButton(onClick = { pendingDelete = item }) { Text("削除") }
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+
+    pendingDelete?.let { item ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("Libraryから削除") },
+            text = { Text("「${item.title}」の端末内ファイルも削除します。元に戻せません。") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        pendingDelete = null
+                        onDelete(item)
+                    },
+                ) {
+                    Text("削除")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) { Text("戻る") }
+            },
+        )
+    }
+}
+
+@Composable
+private fun SavedMiniPlayer(
+    path: String,
+    title: String,
+    playRequest: Int,
+    initialPositionMs: Long,
+    onPositionChanged: (Long) -> Unit,
+) {
     val context = LocalContext.current
     val player = remember { ExoPlayer.Builder(context).build() }
     val fileAvailable = remember(path) { File(path).let { it.exists() && it.length() > 0L } }
@@ -665,6 +812,7 @@ private fun SavedMiniPlayer(path: String, title: String, playRequest: Int) {
     var durationMs by remember { mutableLongStateOf(0L) }
     var isSeeking by remember { mutableStateOf(false) }
     var seekFraction by remember { mutableStateOf(0f) }
+    var lastPersistedPositionMs by remember(path) { mutableLongStateOf(initialPositionMs) }
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
@@ -694,6 +842,7 @@ private fun SavedMiniPlayer(path: String, title: String, playRequest: Int) {
         if (file.exists() && file.length() > 0L) {
             player.setMediaItem(MediaItem.fromUri(Uri.fromFile(file)))
             player.prepare()
+            if (initialPositionMs > 0L) player.seekTo(initialPositionMs)
         }
     }
 
@@ -707,6 +856,10 @@ private fun SavedMiniPlayer(path: String, title: String, playRequest: Int) {
             }
             if (!isSeeking) {
                 positionMs = player.currentPosition.coerceIn(0L, durationMs.coerceAtLeast(0L))
+            }
+            if (player.isPlaying && kotlin.math.abs(positionMs - lastPersistedPositionMs) >= 5_000L) {
+                lastPersistedPositionMs = positionMs
+                onPositionChanged(positionMs)
             }
             delay(if (player.isPlaying) 250L else 750L)
         }
@@ -744,7 +897,11 @@ private fun SavedMiniPlayer(path: String, title: String, playRequest: Int) {
         }
     }
 
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .fillMaxWidth(),
+    ) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -799,6 +956,8 @@ private fun SavedMiniPlayer(path: String, title: String, playRequest: Int) {
                     val targetMs = (seekFraction * durationMs).toLong().coerceIn(0L, durationMs)
                     player.seekTo(targetMs)
                     positionMs = targetMs
+                    lastPersistedPositionMs = targetMs
+                    onPositionChanged(targetMs)
                     isSeeking = false
                 },
                 modifier = Modifier.fillMaxWidth(),
@@ -828,6 +987,8 @@ private fun SavedMiniPlayer(path: String, title: String, playRequest: Int) {
                         val targetMs = (player.currentPosition - 10_000L).coerceAtLeast(0L)
                         player.seekTo(targetMs)
                         positionMs = targetMs
+                        lastPersistedPositionMs = targetMs
+                        onPositionChanged(targetMs)
                     },
                     modifier = Modifier.weight(1f),
                     enabled = fileAvailable && durationMs > 0L,
@@ -838,6 +999,8 @@ private fun SavedMiniPlayer(path: String, title: String, playRequest: Int) {
                     onClick = {
                         if (player.isPlaying) {
                             player.pause()
+                            lastPersistedPositionMs = player.currentPosition
+                            onPositionChanged(player.currentPosition)
                         } else {
                             if (player.playbackState == Player.STATE_ENDED) player.seekTo(0L)
                             player.play()
@@ -853,6 +1016,8 @@ private fun SavedMiniPlayer(path: String, title: String, playRequest: Int) {
                         val targetMs = (player.currentPosition + 10_000L).coerceAtMost(durationMs)
                         player.seekTo(targetMs)
                         positionMs = targetMs
+                        lastPersistedPositionMs = targetMs
+                        onPositionChanged(targetMs)
                     },
                     modifier = Modifier.weight(1f),
                     enabled = fileAvailable && durationMs > 0L,
@@ -865,7 +1030,10 @@ private fun SavedMiniPlayer(path: String, title: String, playRequest: Int) {
 }
 
 @Composable
-private fun BottomNavigationPreview() {
+private fun BottomNavigation(
+    selectedTab: AppTab,
+    onSelect: (AppTab) -> Unit,
+) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -874,8 +1042,18 @@ private fun BottomNavigationPreview() {
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = { }) { Text("検索") }
-            TextButton(onClick = { }, enabled = false) { Text("Library") }
+            TextButton(
+                onClick = { onSelect(AppTab.SEARCH) },
+                enabled = selectedTab != AppTab.SEARCH,
+            ) {
+                Text("検索")
+            }
+            TextButton(
+                onClick = { onSelect(AppTab.LIBRARY) },
+                enabled = selectedTab != AppTab.LIBRARY,
+            ) {
+                Text("Library")
+            }
             TextButton(onClick = { }, enabled = false) { Text("Playlist") }
         }
     }
@@ -895,6 +1073,8 @@ private fun formatDuration(totalSeconds: Int): String {
 
 private fun formatPlaybackTime(milliseconds: Long): String =
     formatDuration((milliseconds.coerceAtLeast(0L) / 1_000L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+
+private fun formatFileSize(bytes: Long): String = "%.1f MB".format(bytes.coerceAtLeast(0L) / 1_048_576.0)
 
 private val WmsDarkColors = darkColorScheme(
     primary = Color(0xFF57D8FF),

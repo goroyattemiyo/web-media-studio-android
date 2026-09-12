@@ -481,7 +481,7 @@ Current Gate A3 checkpoint on 2026-09-13 JST:
 ```text
 branch: feat/gate-a3-local-library
 verified implementation: f301580c1235d6d9ba767ada2c9d3002d168e67b
-status: IN PROGRESS
+status: LOCAL PASS
 ```
 
 Room schema v1, metadata persistence, acquisition registration, existing-file backfill,
@@ -489,9 +489,10 @@ Library listing/playback, persistent Mini Player, managed deletion implementatio
 repository tests are present. Local unit tests, lint, APK build, device installation,
 two-item listing, and list playback passed.
 
-Resume with the restart/position, duplicate-item deletion, and controlled missing-file
-checks in `docs/GATE_A3_DEVICE_CHECK.md`. Do not mark Gate A3 LOCAL PASS until those
-checks and a final local three-task verification pass.
+Restart/position persistence, managed duplicate deletion, controlled missing-file recovery,
+and the final local three-task verification passed on 2026-09-13 JST. See
+`docs/GATE_A3_DEVICE_CHECK.md` for the evidence. GitHub Actions and merge to `main`
+were not run.
 
 Gate A3 local exit target:
 

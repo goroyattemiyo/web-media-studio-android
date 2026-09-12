@@ -112,10 +112,10 @@ Exit: an acquisition survives leaving the Activity and remains controllable.
 
 - [x] Room schema
 - [x] media metadata persistence
-- [ ] app-specific media file lifecycle
+- [x] app-specific media file lifecycle
 - [x] All media list
-- [ ] delete from WMS
-- [ ] reopen app and retain library
+- [x] delete from WMS
+- [x] reopen app and retain library
 - [x] persistent Mini Player shell above bottom navigation when media is loaded
 
 Checkpoint on 2026-09-13 JST:
@@ -127,7 +127,10 @@ Checkpoint on 2026-09-13 JST:
 - local `testDebugUnitTest`, `lintDebug`, and `assembleDebug` pass
 - target device shows both existing items in Library and list playback passes
 - verified implementation checkpoint: `f301580c1235d6d9ba767ada2c9d3002d168e67b`
-- restart persistence, device deletion, and missing-file behavior remain open
+- restart/selection/position persistence passed on device
+- managed deletion and controlled missing-file recovery passed on device
+
+**Gate A3: LOCAL PASS — verified locally and on the target Android device on 2026-09-13 JST.**
 
 Exit: acquired media survives app restart and remains playable.
 
@@ -222,4 +225,4 @@ Visualizer modes:
 
 ## Current priority
 
-**Gate A3 — Persistent Local Library (IN PROGRESS).** Resume restart persistence, duplicate-item deletion, and missing-file device checks from `docs/GATE_A3_DEVICE_CHECK.md`. Do not run GitHub Actions or merge to `main`.
+**Gate A4 — Persistent playlists.** Continue locally from the verified Gate A3 checkpoint. Do not run GitHub Actions or merge to `main`.

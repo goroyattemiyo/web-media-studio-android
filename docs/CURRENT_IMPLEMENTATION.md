@@ -94,7 +94,7 @@ Verified code checkpoint: `3716ab5afe6d34821dfcddcb2d3b820afe66e1e1`.
 
 Gate A2 is LOCAL PASS. GitHub Actions and merge to `main` were intentionally not run.
 
-## Gate A3 — checkpoint IN PROGRESS
+## Gate A3 — LOCAL PASS
 
 Current verified implementation checkpoint:
 
@@ -132,14 +132,13 @@ Target-device checkpoint on Redmi 12 5G, Android 15 / API 35:
 - Room database was created
 - the two existing non-empty MP3 files appeared through the Room-backed Mini Player/Library state
 - user confirmed Library shows both items and list playback works
+- force-stop/restart retained the Room rows, selected media, and the saved `4:56 / 4:58` playback position
+- deleting one duplicate removed exactly its Room row and managed file; the remaining item stayed playable
+- a disposable missing-file item showed a clear missing state, disabled playback, and allowed safe stale-row deletion
+- the disposable test copy and Download backup were removed; the valid `wms-9d75...` item remains
+- final `testDebugUnitTest`, `lintDebug`, and `assembleDebug` all passed after device verification
 
-Still required before Gate A3 LOCAL PASS:
-
-1. restart/force-stop WMS and confirm the same Room rows, selection, and playback position return,
-2. delete the known duplicate test item and confirm both its Room row and managed file disappear while the other item remains playable,
-3. simulate or create a missing-file row and confirm graceful display/removal behavior on device,
-4. run the final local three-task verification after any fixes,
-5. update the Gate A3 checkpoint from IN PROGRESS to LOCAL PASS.
+Gate A3 is LOCAL PASS at code checkpoint `f301580c1235d6d9ba767ada2c9d3002d168e67b`.
 
 No GitHub Actions or merge to `main` was run.
 

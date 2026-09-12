@@ -2,7 +2,7 @@
 
 Date: 2026-09-13 JST
 
-Status: **IN PROGRESS**
+Status: **LOCAL PASS**
 
 Branch: `feat/gate-a3-local-library`
 
@@ -23,7 +23,7 @@ Target device: Redmi 12 5G (`23076RA4BR`), Android 15 / API 35.
 - [x] show the selected item in the persistent Mini Player above bottom navigation
 - [x] pass local `testDebugUnitTest`, `lintDebug`, and `assembleDebug`
 
-## Resume here
+## Verification results
 
 ### A3-1 Restart persistence and position
 
@@ -34,6 +34,8 @@ Target device: Redmi 12 5G (`23076RA4BR`), Android 15 / API 35.
 
 PASS when the two Library rows remain, the selected item remains selected, its position is restored, and playback resumes from that position.
 
+Result: **PASS**. After force-stop and launcher restart, the selected item and `4:56 / 4:58` position were restored with no crash.
+
 ### A3-2 Managed deletion
 
 The acquired directory currently contains two completed test MP3 files of 7,167,788 bytes each. Use the newer duplicate test item for deletion, retaining the other playable copy.
@@ -43,11 +45,15 @@ The acquired directory currently contains two completed test MP3 files of 7,167,
 
 PASS when exactly one Library row and its corresponding managed file disappear, the other row/file remains, and the remaining item still plays.
 
+Result: **PASS**. The older duplicate `wms-7b70...` was deleted; `wms-9d75...` and its 7,167,788-byte file remained playable.
+
 ### A3-3 Missing-file recovery
 
 Create a controlled missing-file condition only for a disposable test item.
 
 PASS when Library shows `ファイルが見つかりません`, disables playback, and allows the stale Room row to be removed without affecting other files.
+
+Result: **PASS**. A disposable copied item showed the missing-file state after its file was moved out, playback was unavailable, and deleting the stale row did not affect `wms-9d75...`. The temporary copy/backup was removed after verification.
 
 ### A3-4 Final verification
 
@@ -58,3 +64,7 @@ Run locally:
 ```
 
 Then update `docs/CURRENT_IMPLEMENTATION.md`, `docs/ROADMAP.md`, and this file to Gate A3 LOCAL PASS, commit, and push. Do not run GitHub Actions and do not merge to `main`.
+
+Result: **PASS** on 2026-09-13 JST. All three local tasks completed successfully after the device checks.
+
+Gate A3 is LOCAL PASS. GitHub Actions and merge to `main` were not run.

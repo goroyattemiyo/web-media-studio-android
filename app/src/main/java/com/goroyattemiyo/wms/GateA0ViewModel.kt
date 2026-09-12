@@ -400,6 +400,8 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
 
+        (app as? WmsApplication)?.requestNotificationPermissionForSave()
+
         _uiState.update {
             it.copy(
                 acquiring = true,

@@ -4,6 +4,8 @@ Last updated: 2026-09-12 JST
 
 This document is the operating guide for continuing WMS Android development on the local Windows PC with Codex while minimizing GitHub Actions usage.
 
+The intended mode is not limited to Gate A2. Codex may continue sequentially through later roadmap Gates as long as each Gate is locally verified, documented, and isolated in its own branch/checkpoint.
+
 ## Read this first
 
 When Codex starts work on this repository, read these files before changing code:
@@ -13,7 +15,7 @@ When Codex starts work on this repository, read these files before changing code
 3. `docs/CURRENT_IMPLEMENTATION.md`
 4. `docs/ARCHITECTURE.md`
 5. `docs/ROADMAP.md`
-6. `docs/GATE_A2_DEVICE_CHECK.md` when working on Gate A2
+6. the current Gate-specific device/checklist document when one exists
 
 Do not assume older chat history is the source of truth when these repository documents say otherwise.
 
@@ -34,6 +36,7 @@ Local Codex on the home PC
   -> local lint
   -> local APK build
   -> fix local build errors
+  -> continue to the next Gate after local PASS
 
 Target Android device
   -> real-device verification
@@ -45,6 +48,94 @@ GitHub Actions
 The rule is:
 
 > CI is not the primary debugging tool. CI is the final verification of a locally validated candidate.
+
+## Autonomous continuation policy
+
+Codex should not stop automatically after Gate A2.
+
+After the current Gate reaches local PASS, Codex should:
+
+1. update the Gate documentation and local checkpoint,
+2. commit and push the verified Gate head,
+3. create the next Gate branch from that verified head,
+4. continue implementation according to `docs/ROADMAP.md`,
+5. keep all later work local/Draft while GitHub Actions minutes are exhausted,
+6. never merge to `main` without explicit instruction.
+
+The expected sequence is currently:
+
+```text
+Gate A2 — Managed acquisition jobs
+  -> Gate A3 — Persistent Local Library
+  -> Gate A4 — Persistent Playlists
+  -> Gate A5 — Background playback / MediaSession / Now Playing
+  -> Gate A6 — Production-quality UX / WMS appearance parity
+  -> Gate A7 — Provider matrix
+  -> Gate A8 — Development distribution
+```
+
+Codex may continue through these Gates in order when technically reasonable.
+
+Do not skip a Gate dependency. Later Gates may be built on top of a locally verified earlier Gate even if that earlier Gate has not yet been merged to `main` because Actions minutes are unavailable.
+
+## Stacked local branch policy while Actions are unavailable
+
+Because Gate A2 cannot currently receive final GitHub CI, later work may be stacked locally.
+
+Example:
+
+```text
+main
+  |
+  +-- feat/gate-a2-managed-acquisition
+          |
+          +-- feat/gate-a3-local-library
+                  |
+                  +-- feat/gate-a4-playlists
+                          |
+                          +-- feat/gate-a5-background-playback
+```
+
+Rules:
+
+- Each Gate gets its own branch.
+- Create the next Gate branch from the locally verified head of the previous Gate.
+- Push each branch so work is backed up to GitHub.
+- Keep PRs Draft while Actions minutes are unavailable.
+- Do not squash multiple Gates into one branch merely to move faster.
+- Do not merge stacked branches into `main` out of order.
+- When Actions minutes become available again, finalize Gates in order.
+
+Finalization after Actions reset should be:
+
+```text
+A2 local PASS -> final CI -> merge A2 to main
+A3 rebase/retarget onto new main -> final CI -> merge A3
+A4 rebase/retarget onto new main -> final CI -> merge A4
+A5 ...
+```
+
+If a later stacked branch conflicts after an earlier Gate is squash-merged, rebase or recreate the later branch from the new `main` and carry only the intended Gate changes forward.
+
+## When Codex must stop and ask instead of continuing
+
+Codex may proceed autonomously for implementation details that follow the approved architecture and roadmap.
+
+Stop and ask the user before:
+
+- changing the product's core direction,
+- removing an existing user-facing capability,
+- introducing DRM/authentication/cookie bypass behavior,
+- adding account-cookie based acquisition,
+- adding proxy rotation,
+- making destructive or irreversible data migrations,
+- publishing to Play Store or a public release channel,
+- adding paid external infrastructure or services,
+- changing repository visibility or security settings,
+- merging a PR to `main`,
+- spending GitHub Actions minutes intentionally when the user has not approved it.
+
+Normal implementation decisions inside an approved Gate do not require repeated confirmation.
 
 ## GitHub Actions policy
 
@@ -58,6 +149,15 @@ The rule is:
 - Aim for **one full GitHub Actions run per Gate / feature**.
 
 If a workflow fails before any step starts (`steps = null`, empty, or zero steps), do not treat it as a code/Gradle failure. Check Actions minutes, Billing/Budget, GitHub service status, permissions, and runner availability first.
+
+Current known account condition as of 2026-09-12:
+
+```text
+GitHub Free Actions minutes: 2000 / 2000 used
+Actions storage: approximately 0.1 / 0.5 GB used
+```
+
+Therefore GitHub Actions must not be used as a development loop until the included minutes reset or the user explicitly changes the billing policy.
 
 ## Artifact policy
 
@@ -117,6 +217,7 @@ For each implementation chunk:
 9. Perform the required real-device check when the change needs device behavior.
 10. Commit and push only after local verification is acceptable.
 11. Keep the PR Draft until the Gate is ready for final CI.
+12. If the Gate reaches local PASS, create the next Gate branch and continue.
 ```
 
 Avoid the loop:
@@ -153,15 +254,24 @@ Expected APK path after a successful local build:
 app\build\outputs\apk\debug\app-debug.apk
 ```
 
-## Optional local helper script
+## Local helper script
 
-A future helper may wrap the standard checks in a single command such as:
+Codex should create and maintain a helper such as:
 
 ```text
 scripts/local-verify.ps1
 ```
 
-The script should only orchestrate local checks; it must not automatically trigger GitHub Actions.
+The helper should run local checks only, for example:
+
+```text
+testDebugUnitTest
+-> lintDebug
+-> assembleDebug
+-> print resulting APK path
+```
+
+It must not trigger GitHub Actions.
 
 ## What Codex should check before declaring local PASS
 
@@ -178,6 +288,7 @@ At minimum review:
 - foreground-service rules
 - Android Manifest declarations
 - notification permission behavior
+- persistence/migration behavior when Room/DataStore is involved
 - unit tests
 - lint
 - APK assembly
@@ -185,6 +296,22 @@ At minimum review:
 - real-device test procedure
 
 Do not report a Gate as complete only because the APK compiles.
+
+For local-only progress while Actions are exhausted, distinguish:
+
+```text
+LOCAL PASS
+```
+
+from:
+
+```text
+FINAL PASS
+```
+
+`LOCAL PASS` means local tests/lint/build and required local device checks passed.
+
+`FINAL PASS` requires the project's final GitHub CI and merge criteria when applicable.
 
 ## Commit and push policy
 
@@ -209,7 +336,33 @@ After pushing, keep the PR Draft unless the user explicitly decides the Gate is 
 
 Codex must not merge the PR unless explicitly instructed.
 
-## Final Gate workflow
+## Gate transition procedure
+
+When a Gate reaches LOCAL PASS:
+
+1. Update `docs/CURRENT_IMPLEMENTATION.md`.
+2. Update `docs/ROADMAP.md` with the local verification status.
+3. Add or update a Gate-specific verification/checkpoint document.
+4. Commit and push the verified Gate head.
+5. Record the commit SHA in the checkpoint document.
+6. Create the next Gate branch from that SHA.
+7. Continue work on the next Gate.
+
+Example after Gate A2 LOCAL PASS:
+
+```powershell
+git status
+git add <intended files>
+git commit -m "docs: record Gate A2 local pass"
+git push origin feat/gate-a2-managed-acquisition
+
+git switch -c feat/gate-a3-local-library
+git push -u origin feat/gate-a3-local-library
+```
+
+Then continue Gate A3 without waiting for GitHub Actions.
+
+## Final Gate workflow when Actions are available
 
 Once local implementation and real-device verification are ready:
 
@@ -273,7 +426,7 @@ Gate A2 implementation currently includes:
 - state-transition unit tests
 - real-device Gate A2 checklist
 
-Gate A2 is **not complete** until build and device verification pass.
+Gate A2 is **not FINAL PASS** until build/device verification and final CI pass.
 
 Required Gate A2 real-device path:
 
@@ -298,21 +451,112 @@ start another save
 
 See `docs/GATE_A2_DEVICE_CHECK.md` for the detailed checklist.
 
-## After Gate A2
+## Gate A3 target — Persistent Local Library
 
-The planned order remains:
+After Gate A2 reaches LOCAL PASS, continue to Gate A3.
+
+Expected scope:
+
+- Room database/schema
+- media entity and DAO
+- register successful acquisitions automatically
+- persist title/provider/path/created time and required metadata
+- Library screen in bottom navigation
+- list all saved WMS media
+- open/play a saved item
+- delete item from WMS safely
+- retain Library across app restart
+- recover gracefully if a media file is missing
+- persistent Mini Player shell using Library state where appropriate
+- migration/version strategy documented
+- unit tests for DAO/repository behavior where practical
+
+Do not introduce destructive migration shortcuts merely to make development easier.
+
+Gate A3 local exit target:
 
 ```text
-Gate A2 — Managed acquisition jobs
-Gate A3 — Persistent Local Library (Room)
-Gate A4 — Persistent Playlists
-Gate A5 — Background playback / MediaSession / Now Playing
+save authorized media
+  -> item appears in Library
+  -> restart app
+  -> item is still present
+  -> play item
+  -> delete item
+  -> database and local file lifecycle remain consistent
 ```
 
-The main bottom navigation product direction is:
+## Gate A4 target — Persistent Playlists
+
+After Gate A3 reaches LOCAL PASS, continue to Gate A4.
+
+Expected scope:
+
+- playlist entity/schema
+- create / rename / delete playlists
+- add/remove Library items
+- ordered playlist entries
+- persistent ordering
+- add acquired item to a playlist where product flow allows
+- Playlist bottom navigation destination
+- playlist detail screen
+- previous / next behavior based on ordered entries
+- queue restoration foundation
+
+Gate A4 local exit target:
+
+```text
+create playlist
+  -> add multiple Library items
+  -> reorder / persist order
+  -> restart app
+  -> playlist and order remain intact
+  -> play items in expected order
+```
+
+## Gate A5 target — Background playback / MediaSession / Now Playing
+
+After Gate A4 reaches LOCAL PASS, continue to Gate A5 if the architecture remains consistent with `docs/ARCHITECTURE.md`.
+
+Expected scope:
+
+- `MediaLibraryService`
+- MediaSession ownership
+- ExoPlayer owned by playback service instead of transient UI
+- audio focus
+- media notification/system controls
+- screen-off playback
+- Play/Pause/Previous/Next
+- queue and position restore foundation
+- full native Now Playing screen
+- preserve WMS player identity
+- visualizer renderer boundary
+- lightweight visual modes first
+
+This Gate requires careful real-device verification. Do not claim local PASS without testing background/screen-off behavior on the target Android device.
+
+## Gates A6–A8
+
+Codex may continue beyond A5 according to `docs/ROADMAP.md`, but preserve the same rules:
+
+- one Gate per branch,
+- local verification first,
+- no unnecessary GitHub Actions,
+- no merge without explicit approval,
+- no security/product-boundary expansion without approval,
+- document LOCAL PASS checkpoints before moving forward.
+
+## Bottom navigation product direction
+
+The main product direction is:
 
 ```text
 Search | Library | Playlist
 ```
 
-Do not jump ahead in a way that destabilizes the current Gate unless the user explicitly changes priorities.
+Library and Playlist are not placeholders once Gates A3 and A4 are implemented.
+
+## Final operating instruction to Codex
+
+When starting from this document:
+
+> Continue the current Gate to LOCAL PASS using local test/lint/build and required real-device checks. Do not use GitHub Actions as a development loop. Once a Gate reaches LOCAL PASS, document the checkpoint, push the Gate branch, create the next Gate branch from that verified head, and continue through the roadmap in order. Keep work in Draft/unmerged branches while Actions minutes are exhausted. Stop only for explicit approval boundaries listed in this document or when a blocking technical decision cannot be safely resolved from the repository architecture and roadmap.

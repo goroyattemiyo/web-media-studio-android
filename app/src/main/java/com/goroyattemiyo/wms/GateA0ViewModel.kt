@@ -2,9 +2,13 @@ package com.goroyattemiyo.wms
 
 import android.app.Application
 import android.content.Context
+import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.goroyattemiyo.wms.acquisition.AcquisitionEngineException
+import com.goroyattemiyo.wms.acquisition.AcquisitionJobStatus
+import com.goroyattemiyo.wms.acquisition.ManagedAcquisitionBus
+import com.goroyattemiyo.wms.acquisition.ManagedAcquisitionService
 import com.goroyattemiyo.wms.acquisition.YoutubeDlAcquisitionEngine
 import com.yausername.youtubedl_android.YoutubeDL
 import kotlinx.coroutines.Dispatchers
@@ -45,10 +49,63 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
     private val _uiState = MutableStateFlow(GateA0UiState())
     val uiState = _uiState.asStateFlow()
 
-    private var acquireJob: Job? = null
     private var probeJob: Job? = null
 
     init {
+        viewModelScope.launch {
+            ManagedAcquisitionBus.state.collect { jobState ->
+                _uiState.update { current ->
+                    when (jobState.status) {
+                        AcquisitionJobStatus.IDLE -> current
+                        AcquisitionJobStatus.RUNNING -> current.copy(
+                            acquiring = true,
+                            progressPercent = jobState.progressPercent,
+                            progressMessage = jobState.progressMessage,
+                            savedPath = null,
+                            savedTitle = null,
+                            errorCode = null,
+                            errorMessage = null,
+                        )
+                        AcquisitionJobStatus.SUCCEEDED -> {
+                            val matchesCurrent = current.url.trim() == jobState.sourceUrl
+                            current.copy(
+                                acquiring = false,
+                                progressPercent = 100f,
+                                progressMessage = "保存完了",
+                                savedPath = jobState.savedPath,
+                                savedTitle = jobState.savedTitle,
+                                detectedTitle = if (matchesCurrent) {
+                                    current.detectedTitle ?: jobState.savedTitle
+                                } else {
+                                    current.detectedTitle
+                                },
+                                detectedProvider = if (matchesCurrent) {
+                                    current.detectedProvider ?: jobState.savedProvider
+                                } else {
+                                    current.detectedProvider
+                                },
+                                rightsConfirmed = if (matchesCurrent) false else current.rightsConfirmed,
+                                errorCode = null,
+                                errorMessage = null,
+                            )
+                        }
+                        AcquisitionJobStatus.FAILED -> current.copy(
+                            acquiring = false,
+                            progressPercent = 0f,
+                            progressMessage = "",
+                            errorCode = jobState.errorCode,
+                            errorMessage = jobState.errorMessage,
+                        )
+                        AcquisitionJobStatus.CANCELED -> current.copy(
+                            acquiring = false,
+                            progressPercent = 0f,
+                            progressMessage = "キャンセルしました",
+                        )
+                    }
+                }
+            }
+        }
+
         viewModelScope.launch {
             val result = engine.initialize()
             val version = if (result.ready) readYoutubeDlVersion() else null
@@ -332,55 +389,50 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
 
-        acquireJob = viewModelScope.launch {
-            _uiState.update {
-                it.copy(
-                    acquiring = true,
-                    progressPercent = 0f,
-                    progressMessage = "取得を開始しています",
-                    savedPath = null,
-                    savedTitle = null,
-                    errorCode = null,
-                    errorMessage = null,
-                )
-            }
+        _uiState.update {
+            it.copy(
+                acquiring = true,
+                progressPercent = 0f,
+                progressMessage = "取得を開始しています",
+                savedPath = null,
+                savedTitle = null,
+                errorCode = null,
+                errorMessage = null,
+            )
+        }
 
-            engine.acquireMp3(snapshot.url) { progress ->
-                _uiState.update {
-                    it.copy(
-                        progressPercent = progress.percent,
-                        progressMessage = progress.message,
-                    )
-                }
-            }
-                .onSuccess { result ->
-                    _uiState.update {
-                        it.copy(
-                            acquiring = false,
-                            progressPercent = 100f,
-                            progressMessage = "保存完了",
-                            savedPath = result.file.absolutePath,
-                            savedTitle = result.title,
-                            detectedTitle = it.detectedTitle ?: result.title,
-                            detectedProvider = it.detectedProvider ?: result.provider,
-                            rightsConfirmed = false,
-                        )
-                    }
-                }
-                .onFailure(::showFailure)
+        val intent = Intent(app, ManagedAcquisitionService::class.java).apply {
+            action = ManagedAcquisitionService.ACTION_START
+            putExtra(ManagedAcquisitionService.EXTRA_SOURCE_URL, snapshot.url.trim())
+        }
+
+        runCatching {
+            app.startForegroundService(intent)
+        }.onFailure { error ->
+            showFailure(
+                AcquisitionEngineException(
+                    "SERVICE_START_FAILED",
+                    "バックグラウンド保存処理を開始できませんでした。",
+                    error,
+                ),
+            )
         }
     }
 
     fun cancelAcquisition() {
-        engine.cancel()
-        acquireJob?.cancel()
-        acquireJob = null
-        _uiState.update {
-            it.copy(
-                acquiring = false,
-                progressMessage = "キャンセルしました",
-            )
+        val intent = Intent(app, ManagedAcquisitionService::class.java).apply {
+            action = ManagedAcquisitionService.ACTION_CANCEL
         }
+        runCatching { app.startService(intent) }
+            .onFailure { error ->
+                showFailure(
+                    AcquisitionEngineException(
+                        "SERVICE_CANCEL_FAILED",
+                        "保存処理のキャンセル要求を送れませんでした。",
+                        error,
+                    ),
+                )
+            }
     }
 
     private fun showFailure(error: Throwable) {
@@ -402,8 +454,6 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
 
     override fun onCleared() {
         probeJob?.cancel()
-        acquireJob?.cancel()
-        engine.cancel()
         super.onCleared()
     }
 

@@ -1,14 +1,11 @@
 name: Android CI
 
 on:
-  # Gate development stays in Draft PRs. Run the expensive Android CI only
-  # when a Draft PR is explicitly promoted to Ready for review.
+  # Development stays in Draft PRs. Run the expensive Android build only
+  # when the PR is explicitly promoted to Ready for review.
   pull_request:
     branches: [main]
     types: [ready_for_review]
-  # One verification run after the accepted PR is merged.
-  push:
-    branches: [main]
   # Escape hatch for an intentional manual verification run.
   workflow_dispatch:
 
@@ -57,8 +54,8 @@ jobs:
           name: wms-android-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-          # APKs are handed off immediately in ChatGPT, so GitHub only needs a
-          # short recovery window instead of retaining every ~110 MB build.
+          # ChatGPT hands off the APK immediately, so GitHub only needs a short
+          # recovery window instead of retaining every ~110 MB build.
           retention-days: 1
 
       - name: Keep only the latest two WMS Android APK artifacts
@@ -72,10 +69,10 @@ jobs:
             );
 
             const wmsApks = artifacts
-              .filter((artifact) => artifact.name === 'wms-android-debug')
+              .filter((artifact) => artifact.name.startsWith('wms-android-'))
               .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
             for (const artifact of wmsApks.slice(2)) {
-              core.info(`Deleting old APK artifact ${artifact.id} from ${artifact.created_at}`);
+              core.info(`Deleting old APK artifact ${artifact.id} (${artifact.name}) from ${artifact.created_at}`);
               await github.rest.actions.deleteArtifact({ owner, repo, artifact_id: artifact.id });
             }

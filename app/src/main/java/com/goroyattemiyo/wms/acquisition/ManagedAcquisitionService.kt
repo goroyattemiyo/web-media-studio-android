@@ -40,21 +40,38 @@ class ManagedAcquisitionService : Service() {
         when (intent?.action) {
             ACTION_CANCEL -> cancelActiveJob()
             ACTION_START -> startManagedJob(intent.getStringExtra(EXTRA_SOURCE_URL).orEmpty())
+            else -> stopSelf(startId)
         }
         return START_NOT_STICKY
     }
 
     private fun startManagedJob(sourceUrl: String) {
         val source = sourceUrl.trim()
-        if (source.isBlank() || activeJob?.isActive == true) return
+        if (source.isBlank()) {
+            stopSelf()
+            return
+        }
+        if (activeJob?.isActive == true) return
 
         activeSourceUrl = source
         cancelRequested = false
         ManagedAcquisitionBus.started(source)
-        startForeground(
-            NOTIFICATION_ID,
-            runningNotification(0, "取得を開始しています"),
-        )
+
+        try {
+            startForeground(
+                NOTIFICATION_ID,
+                runningNotification(0, "取得を開始しています"),
+            )
+        } catch (error: Throwable) {
+            ManagedAcquisitionBus.failed(
+                source,
+                "FOREGROUND_START_FAILED",
+                "バックグラウンド保存の通知を開始できませんでした。",
+            )
+            activeSourceUrl = ""
+            stopSelf()
+            return
+        }
 
         activeJob = serviceScope.launch {
             val initState = engine.initialize()
@@ -90,6 +107,7 @@ class ManagedAcquisitionService : Service() {
             result.onSuccess { acquisition ->
                 ManagedAcquisitionBus.succeeded(acquisition)
                 activeJob = null
+                activeSourceUrl = ""
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 notificationManager.notify(
                     NOTIFICATION_ID,
@@ -105,6 +123,7 @@ class ManagedAcquisitionService : Service() {
                 val message = engineError?.message ?: "メディアの保存に失敗しました。"
                 ManagedAcquisitionBus.failed(source, code, message)
                 activeJob = null
+                activeSourceUrl = ""
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 notificationManager.notify(
                     NOTIFICATION_ID,
@@ -119,11 +138,19 @@ class ManagedAcquisitionService : Service() {
     }
 
     private fun cancelActiveJob() {
+        val job = activeJob
         val source = activeSourceUrl
+        if (job?.isActive != true) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return
+        }
+
         cancelRequested = true
         engine.cancel()
-        activeJob?.cancel()
+        job.cancel()
         activeJob = null
+        activeSourceUrl = ""
         if (source.isNotBlank()) {
             ManagedAcquisitionBus.canceled(source)
         }
@@ -137,6 +164,7 @@ class ManagedAcquisitionService : Service() {
             activeJob?.cancel()
         }
         activeJob = null
+        activeSourceUrl = ""
         serviceScope.cancel()
         super.onDestroy()
     }

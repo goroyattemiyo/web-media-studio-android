@@ -55,9 +55,16 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             ManagedAcquisitionBus.state.collect { jobState ->
                 _uiState.update { current ->
+                    val restoredUrl = if (current.url.isBlank() && jobState.sourceUrl.isNotBlank()) {
+                        jobState.sourceUrl
+                    } else {
+                        current.url
+                    }
+
                     when (jobState.status) {
                         AcquisitionJobStatus.IDLE -> current
                         AcquisitionJobStatus.RUNNING -> current.copy(
+                            url = restoredUrl,
                             acquiring = true,
                             progressPercent = jobState.progressPercent,
                             progressMessage = jobState.progressMessage,
@@ -67,8 +74,9 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
                             errorMessage = null,
                         )
                         AcquisitionJobStatus.SUCCEEDED -> {
-                            val matchesCurrent = current.url.trim() == jobState.sourceUrl
+                            val matchesCurrent = restoredUrl.trim() == jobState.sourceUrl
                             current.copy(
+                                url = restoredUrl,
                                 acquiring = false,
                                 progressPercent = 100f,
                                 progressMessage = "保存完了",
@@ -90,6 +98,7 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
                             )
                         }
                         AcquisitionJobStatus.FAILED -> current.copy(
+                            url = restoredUrl,
                             acquiring = false,
                             progressPercent = 0f,
                             progressMessage = "",
@@ -97,6 +106,7 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
                             errorMessage = jobState.errorMessage,
                         )
                         AcquisitionJobStatus.CANCELED -> current.copy(
+                            url = restoredUrl,
                             acquiring = false,
                             progressPercent = 0f,
                             progressMessage = "キャンセルしました",
@@ -121,11 +131,12 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
                 )
             }
 
-            if (result.ready && shouldAutoUpdateYoutubeDl()) {
+            val managedJobRunning = ManagedAcquisitionBus.state.value.status == AcquisitionJobStatus.RUNNING
+            if (result.ready && !managedJobRunning && shouldAutoUpdateYoutubeDl()) {
                 refreshYoutubeDlStable(automatic = true)
             }
 
-            if (result.ready && _uiState.value.url.isNotBlank()) {
+            if (result.ready && _uiState.value.url.isNotBlank() && !managedJobRunning) {
                 probe()
             }
         }

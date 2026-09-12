@@ -8,6 +8,7 @@ import com.yausername.youtubedl_android.YoutubeDLRequest
 import java.io.File
 import java.net.URI
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -30,6 +31,7 @@ data class EngineDiagnostics(
 class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
     private val appContext = context.applicationContext
     private val initMutex = Mutex()
+    private val cancelRequested = AtomicBoolean(false)
 
     @Volatile
     private var initialized = false
@@ -97,6 +99,10 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
         }
     }
 
+    fun prepareForAcquisition() {
+        cancelRequested.set(false)
+    }
+
     override suspend fun acquireMp3(
         sourceUrl: String,
         onProgress: (AcquisitionProgress) -> Unit,
@@ -104,6 +110,7 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
         runCatching {
             validateUrl(sourceUrl)
             ensureReady()
+            ensureNotCanceled()
 
             val source = sourceUrl.trim()
             val info = try {
@@ -111,6 +118,7 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
             } catch (error: Throwable) {
                 throw classifyError(error, "ACQUIRE_FAILED")
             }
+            ensureNotCanceled()
 
             val outputRoot = File(
                 appContext.getExternalFilesDir(Environment.DIRECTORY_MUSIC) ?: appContext.filesDir,
@@ -132,19 +140,24 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
                 }
 
                 onProgress(AcquisitionProgress(0f, "取得を開始しています"))
+                ensureNotCanceled()
 
                 val response = try {
                     YoutubeDL.getInstance().execute(request, PROCESS_ID) { progress: Float, _: Long, line: String ->
-                        onProgress(
-                            AcquisitionProgress(
-                                percent = progress.coerceIn(0f, 100f),
-                                message = safeProgressMessage(line),
-                            ),
-                        )
+                        if (!cancelRequested.get()) {
+                            onProgress(
+                                AcquisitionProgress(
+                                    percent = progress.coerceIn(0f, 100f),
+                                    message = safeProgressMessage(line),
+                                ),
+                            )
+                        }
                     }
                 } catch (error: Throwable) {
+                    if (cancelRequested.get()) throw CancellationException("Acquisition canceled", error)
                     throw classifyError(error, "ACQUIRE_FAILED")
                 }
+                ensureNotCanceled()
 
                 val produced = jobDir.listFiles()
                     ?.filter { it.isFile && it.extension.equals("mp3", ignoreCase = true) }
@@ -159,7 +172,9 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
                 val staging = File(outputRoot, "$destinationName.part")
 
                 try {
+                    ensureNotCanceled()
                     produced.copyTo(staging, overwrite = false)
+                    ensureNotCanceled()
 
                     if (!staging.exists() || staging.length() <= 0L) {
                         throw AcquisitionEngineException(
@@ -168,10 +183,8 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
                         )
                     }
 
-                    // Never expose a partially copied file as a completed WMS item.
-                    // Cancellation observed before finalization leaves only the .part
-                    // file, which is removed by the catch/finally cleanup below.
                     currentCoroutineContext().ensureActive()
+                    ensureNotCanceled()
 
                     if (!staging.renameTo(destination)) {
                         throw AcquisitionEngineException(
@@ -180,9 +193,8 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
                         )
                     }
 
-                    // If cancellation raced the final rename, remove the just-finalized
-                    // file instead of reporting it as a completed acquisition.
                     currentCoroutineContext().ensureActive()
+                    ensureNotCanceled()
 
                     if (!destination.exists() || destination.length() <= 0L) {
                         throw AcquisitionEngineException(
@@ -211,7 +223,14 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
     }
 
     override fun cancel() {
+        cancelRequested.set(true)
         runCatching { YoutubeDL.getInstance().destroyProcessById(PROCESS_ID) }
+    }
+
+    private fun ensureNotCanceled() {
+        if (cancelRequested.get()) {
+            throw CancellationException("Acquisition canceled")
+        }
     }
 
     private suspend fun ensureReady() {

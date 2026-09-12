@@ -34,10 +34,11 @@ class ManagedAcquisitionStateTest {
     @Test
     fun successKeepsSourceAndPublishesFinalMetadata() {
         ManagedAcquisitionBus.started("https://example.com/media")
+        val finalFile = File("/tmp/final.mp3")
 
         ManagedAcquisitionBus.succeeded(
             AcquisitionResult(
-                file = File("/tmp/final.mp3"),
+                file = finalFile,
                 title = "Test title",
                 provider = "YouTube",
             ),
@@ -48,7 +49,7 @@ class ManagedAcquisitionStateTest {
         assertEquals("https://example.com/media", state.sourceUrl)
         assertEquals(100f, state.progressPercent)
         assertEquals("保存完了", state.progressMessage)
-        assertEquals("/tmp/final.mp3", state.savedPath)
+        assertEquals(finalFile.absolutePath, state.savedPath)
         assertEquals("Test title", state.savedTitle)
         assertEquals("YouTube", state.savedProvider)
         assertNull(state.errorCode)

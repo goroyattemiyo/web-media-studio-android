@@ -72,6 +72,15 @@ Gate A2 app version on the branch:
 
 ## Gate A2 acceptance still OPEN
 
+Local Windows verification on 2026-09-12 JST:
+
+- Gradle Wrapper 8.13 is now included with distribution checksum verification
+- `:app:testDebugUnitTest` passed with JDK 17
+- `:app:lintDebug` passed
+- `:app:assembleDebug` passed and produced `app/build/outputs/apk/debug/app-debug.apk`
+- the unit test suite is path-portable on Windows
+- no Android device was connected, so the required Gate A2 device scenarios remain open
+
 Required target-device proof:
 
 1. start a save,

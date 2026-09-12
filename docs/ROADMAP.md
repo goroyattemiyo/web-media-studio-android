@@ -96,6 +96,9 @@ Implementation status on Draft PR #5:
 - temporary per-job cache directory already cleaned in `finally`
 - managed acquisition state-transition unit tests added
 - real-device checklist added at `docs/GATE_A2_DEVICE_CHECK.md`
+- Gradle Wrapper 8.13 and a local verification helper are included
+- local `testDebugUnitTest`, `lintDebug`, and `assembleDebug` pass on Windows with JDK 17
+- target-device verification is still pending because no device was connected during the local build pass
 
 The checkboxes above remain intentionally open until CI and target-device verification pass.
 

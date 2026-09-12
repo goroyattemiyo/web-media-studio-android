@@ -154,7 +154,7 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
                         }
                     }
                 } catch (error: Throwable) {
-                    if (cancelRequested.get()) throw CancellationException("Acquisition canceled", error)
+                    if (cancelRequested.get()) throw CancellationException("Acquisition canceled")
                     throw classifyError(error, "ACQUIRE_FAILED")
                 }
                 ensureNotCanceled()

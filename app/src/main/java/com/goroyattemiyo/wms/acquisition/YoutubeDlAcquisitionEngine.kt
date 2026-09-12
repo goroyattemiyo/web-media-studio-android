@@ -8,7 +8,10 @@ import com.yausername.youtubedl_android.YoutubeDLRequest
 import java.io.File
 import java.net.URI
 import java.util.UUID
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -151,27 +154,56 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
                         "MP3生成後のファイルを確認できませんでした。診断: ${safeDiagnostic("${response.err}\n${response.out}")}",
                     )
 
-                val destination = File(outputRoot, "wms-${UUID.randomUUID()}.mp3")
+                val destinationName = "wms-${UUID.randomUUID()}.mp3"
+                val destination = File(outputRoot, destinationName)
+                val staging = File(outputRoot, "$destinationName.part")
+
                 try {
-                    if (!produced.renameTo(destination)) {
-                        produced.copyTo(destination, overwrite = false)
+                    produced.copyTo(staging, overwrite = false)
+
+                    if (!staging.exists() || staging.length() <= 0L) {
+                        throw AcquisitionEngineException(
+                            "OUTPUT_INVALID",
+                            "生成ファイルが空か、保存を確認できませんでした。",
+                        )
                     }
-                } catch (error: Throwable) {
-                    throw classifyError(error, "SAVE_FAILED")
-                }
 
-                if (!destination.exists() || destination.length() <= 0L) {
-                    throw AcquisitionEngineException(
-                        "OUTPUT_INVALID",
-                        "生成ファイルが空か、保存を確認できませんでした。",
+                    // Never expose a partially copied file as a completed WMS item.
+                    // Cancellation observed before finalization leaves only the .part
+                    // file, which is removed by the catch/finally cleanup below.
+                    currentCoroutineContext().ensureActive()
+
+                    if (!staging.renameTo(destination)) {
+                        throw AcquisitionEngineException(
+                            "FINALIZE_FAILED",
+                            "保存ファイルの確定に失敗しました。",
+                        )
+                    }
+
+                    // If cancellation raced the final rename, remove the just-finalized
+                    // file instead of reporting it as a completed acquisition.
+                    currentCoroutineContext().ensureActive()
+
+                    if (!destination.exists() || destination.length() <= 0L) {
+                        throw AcquisitionEngineException(
+                            "OUTPUT_INVALID",
+                            "生成ファイルが空か、保存を確認できませんでした。",
+                        )
+                    }
+
+                    AcquisitionResult(
+                        file = destination,
+                        title = info.title?.trim().orEmpty().ifBlank { "保存済み音声" },
+                        provider = providerFor(sourceUrl),
                     )
+                } catch (error: Throwable) {
+                    staging.delete()
+                    destination.delete()
+                    if (error is CancellationException) throw error
+                    throw classifyError(error, "SAVE_FAILED")
+                } finally {
+                    staging.delete()
                 }
-
-                AcquisitionResult(
-                    file = destination,
-                    title = info.title?.trim().orEmpty().ifBlank { "保存済み音声" },
-                    provider = providerFor(sourceUrl),
-                )
             } finally {
                 jobDir.deleteRecursively()
             }

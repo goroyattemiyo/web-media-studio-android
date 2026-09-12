@@ -57,19 +57,29 @@ class ManagedAcquisitionService : Service() {
         )
 
         activeJob = serviceScope.launch {
-            val youtubeDl = YoutubeDL.getInstance()
-            val result = synchronized(youtubeDl) {
-                // updateYoutubeDL() is synchronized on this same singleton. Keep the
-                // entire managed acquisition behind that monitor so the executable
-                // cannot be replaced while Probe/download/FFmpeg setup is running.
-                runBlocking {
-                    engine.acquireMp3(source) { progress ->
-                        if (!cancelRequested) {
-                            ManagedAcquisitionBus.progress(progress.percent, progress.message)
-                            notificationManager.notify(
-                                NOTIFICATION_ID,
-                                runningNotification(progress.percent.toInt(), progress.message),
-                            )
+            val initState = engine.initialize()
+            val result: Result<AcquisitionResult> = if (!initState.ready) {
+                Result.failure(
+                    AcquisitionEngineException(
+                        initState.code,
+                        initState.message,
+                    ),
+                )
+            } else {
+                val youtubeDl = YoutubeDL.getInstance()
+                synchronized(youtubeDl) {
+                    // updateYoutubeDL() and local Search use this same monitor.
+                    // Engine initialization happens before taking it so the suspend
+                    // acquisition can safely run while updater/search are excluded.
+                    runBlocking {
+                        engine.acquireMp3(source) { progress ->
+                            if (!cancelRequested) {
+                                ManagedAcquisitionBus.progress(progress.percent, progress.message)
+                                notificationManager.notify(
+                                    NOTIFICATION_ID,
+                                    runningNotification(progress.percent.toInt(), progress.message),
+                                )
+                            }
                         }
                     }
                 }

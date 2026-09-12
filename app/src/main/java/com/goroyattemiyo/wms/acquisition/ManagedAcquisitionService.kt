@@ -9,12 +9,14 @@ import android.content.Intent
 import android.os.IBinder
 import com.goroyattemiyo.wms.MainActivity
 import com.goroyattemiyo.wms.R
+import com.yausername.youtubedl_android.YoutubeDL
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 class ManagedAcquisitionService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -55,13 +57,21 @@ class ManagedAcquisitionService : Service() {
         )
 
         activeJob = serviceScope.launch {
-            val result = engine.acquireMp3(source) { progress ->
-                if (!cancelRequested) {
-                    ManagedAcquisitionBus.progress(progress.percent, progress.message)
-                    notificationManager.notify(
-                        NOTIFICATION_ID,
-                        runningNotification(progress.percent.toInt(), progress.message),
-                    )
+            val youtubeDl = YoutubeDL.getInstance()
+            val result = synchronized(youtubeDl) {
+                // updateYoutubeDL() is synchronized on this same singleton. Keep the
+                // entire managed acquisition behind that monitor so the executable
+                // cannot be replaced while Probe/download/FFmpeg setup is running.
+                runBlocking {
+                    engine.acquireMp3(source) { progress ->
+                        if (!cancelRequested) {
+                            ManagedAcquisitionBus.progress(progress.percent, progress.message)
+                            notificationManager.notify(
+                                NOTIFICATION_ID,
+                                runningNotification(progress.percent.toInt(), progress.message),
+                            )
+                        }
+                    }
                 }
             }
 

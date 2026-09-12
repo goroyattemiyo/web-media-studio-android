@@ -7,8 +7,11 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.view.View
+import java.lang.ref.WeakReference
 
 class WmsApplication : Application() {
+    private var resumedActivity = WeakReference<Activity>(null)
+
     override fun onCreate() {
         super.onCreate()
 
@@ -21,14 +24,45 @@ class WmsApplication : Application() {
                 override fun onActivityStarted(activity: Activity) = Unit
 
                 override fun onActivityResumed(activity: Activity) {
-                    requestNotificationPermissionIfNeeded(activity)
+                    resumedActivity = WeakReference(activity)
                 }
 
-                override fun onActivityPaused(activity: Activity) = Unit
+                override fun onActivityPaused(activity: Activity) {
+                    if (resumedActivity.get() === activity) {
+                        resumedActivity.clear()
+                    }
+                }
+
                 override fun onActivityStopped(activity: Activity) = Unit
                 override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
-                override fun onActivityDestroyed(activity: Activity) = Unit
+
+                override fun onActivityDestroyed(activity: Activity) {
+                    if (resumedActivity.get() === activity) {
+                        resumedActivity.clear()
+                    }
+                }
             },
+        )
+    }
+
+    fun requestNotificationPermissionForSave() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+
+        val activity = resumedActivity.get() ?: return
+        if (activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+            return
+        }
+
+        val preferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        if (preferences.getBoolean(KEY_NOTIFICATION_PERMISSION_ASKED, false)) return
+
+        preferences.edit()
+            .putBoolean(KEY_NOTIFICATION_PERMISSION_ASKED, true)
+            .apply()
+
+        activity.requestPermissions(
+            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+            REQUEST_NOTIFICATION_PERMISSION,
         )
     }
 
@@ -45,25 +79,6 @@ class WmsApplication : Application() {
             insets
         }
         content.requestApplyInsets()
-    }
-
-    private fun requestNotificationPermissionIfNeeded(activity: Activity) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-        if (activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-            return
-        }
-
-        val preferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-        if (preferences.getBoolean(KEY_NOTIFICATION_PERMISSION_ASKED, false)) return
-
-        preferences.edit()
-            .putBoolean(KEY_NOTIFICATION_PERMISSION_ASKED, true)
-            .apply()
-
-        activity.requestPermissions(
-            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-            REQUEST_NOTIFICATION_PERMISSION,
-        )
     }
 
     private companion object {

@@ -4,6 +4,14 @@ Date: 2026-09-12 JST
 
 Purpose: verify that acquisition is owned by the foreground service rather than the Activity and remains controllable when the UI leaves/recreates.
 
+Status: **LOCAL PASS** on 2026-09-12 JST.
+
+Verified code checkpoint: `3716ab5afe6d34821dfcddcb2d3b820afe66e1e1`.
+
+Verified APK SHA-256: `0CCE4A1CC4AF6A45D7D11508D0F2C92CBE45392929DFBADC7929F45818CB1212`.
+
+Target device: Redmi 12 5G (`23076RA4BR`), Android 15 / API 35.
+
 ## Preconditions
 
 - install the Gate A2 debug APK over the existing WMS app
@@ -106,3 +114,17 @@ and
 `start -> cancel (UI or notification) -> process stops -> temporary output cleaned`
 
 Do not merge PR #5 solely because CI is green; real-device verification is required.
+
+## Verification record
+
+- [x] A2-1 acquisition continued after leaving WMS and remained represented by its foreground notification
+- [x] A2-2 notification return restored the managed job/result state without starting a duplicate job
+- [x] A2-3 successful MP3 was non-empty, temporary job output was removed, and playback passed
+- [x] A2-4 WMS UI cancellation stopped acquisition, removed its notification, created no partial final MP3, and emptied the job cache
+- [x] A2-5 notification cancellation stopped acquisition, returned canceled state, created no duplicate/partial final item, and emptied the job cache
+- [x] A2-6 controlled storage-permission failure surfaced a user-facing error, registered no success, and cleaned temporary output
+- [x] saved-media seek, elapsed/total time, 10-second skip, pause, and resume controls passed
+
+Post-cancel device inspection found no running `ManagedAcquisitionService`, no active `WMS 保存中` notification, and an empty internal `cache/wms-acquisition-jobs` directory. The acquired-media directory retained only the two already completed, non-empty MP3 files (7,167,788 bytes each).
+
+This is a LOCAL PASS only. GitHub Actions and merge to `main` were not run.

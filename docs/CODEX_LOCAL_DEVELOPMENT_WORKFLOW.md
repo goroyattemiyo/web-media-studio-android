@@ -426,7 +426,10 @@ Gate A2 implementation currently includes:
 - state-transition unit tests
 - real-device Gate A2 checklist
 
-Gate A2 is **not FINAL PASS** until build/device verification and final CI pass.
+Gate A2 reached **LOCAL PASS** on 2026-09-12 JST at verified code checkpoint
+`3716ab5afe6d34821dfcddcb2d3b820afe66e1e1`. Local unit tests, lint, APK build,
+successful playback, UI cancellation, notification cancellation, and cleanup checks passed.
+Final CI and merge to `main` were intentionally not run.
 
 Required Gate A2 real-device path:
 

@@ -77,13 +77,13 @@ Post-Gate-A1 quality status:
 
 ## Gate A2 — Managed acquisition jobs
 
-- [ ] foreground acquisition service
-- [ ] one active job
-- [ ] progress notification
-- [ ] cancel
-- [ ] temporary job directory
-- [ ] atomic success registration
-- [ ] failed/cancelled cleanup
+- [x] foreground acquisition service
+- [x] one active job
+- [x] progress notification
+- [x] cancel
+- [x] temporary job directory
+- [x] atomic success registration
+- [x] failed/cancelled cleanup
 
 Implementation status on Draft PR #5:
 
@@ -98,9 +98,13 @@ Implementation status on Draft PR #5:
 - real-device checklist added at `docs/GATE_A2_DEVICE_CHECK.md`
 - Gradle Wrapper 8.13 and a local verification helper are included
 - local `testDebugUnitTest`, `lintDebug`, and `assembleDebug` pass on Windows with JDK 17
-- target-device verification is still pending because no device was connected during the local build pass
+- target-device success/playback, UI cancel, notification cancel, failure, and cleanup checks pass on Redmi 12 5G with Android 15
+- saved-media playback controls include seek, elapsed/total time, 10-second skip, pause, and resume
+- verified code checkpoint: `3716ab5afe6d34821dfcddcb2d3b820afe66e1e1`
 
-The checkboxes above remain intentionally open until CI and target-device verification pass.
+**Gate A2: LOCAL PASS — verified locally and on the target Android device on 2026-09-12 JST.**
+
+GitHub Actions and merge to `main` remain intentionally unrun.
 
 Exit: an acquisition survives leaving the Activity and remains controllable.
 
@@ -207,6 +211,4 @@ Visualizer modes:
 
 ## Current priority
 
-**Gate A2 / Draft PR #5.** Finish managed-acquisition code and tests without triggering repeated CI. When Actions/storage accounting is available again, mark PR #5 Ready once, produce one Gate A2 APK, run `docs/GATE_A2_DEVICE_CHECK.md`, and squash merge only after target-device PASS.
-
-Persistent Local Library remains Gate A3.
+**Gate A3 — Persistent Local Library.** Continue locally from the verified Gate A2 checkpoint without running GitHub Actions or merging to `main`.

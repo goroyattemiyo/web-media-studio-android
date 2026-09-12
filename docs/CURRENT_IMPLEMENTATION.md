@@ -64,13 +64,15 @@ Implemented on PR #5:
 - only a non-empty final MP3 is published as an `AcquisitionResult`
 - managed acquisition state-transition unit tests added
 - `docs/GATE_A2_DEVICE_CHECK.md` defines the real-device acceptance procedure
+- saved-media player now exposes seek, elapsed/total time, 10-second skip controls, and playback state
+- Import Sheet actions stay above the Android navigation bar
 
 Gate A2 app version on the branch:
 
 - versionCode `6`
 - versionName `0.2.0-a2-managed-acquisition`
 
-## Gate A2 acceptance still OPEN
+## Gate A2 — LOCAL PASS
 
 Local Windows verification on 2026-09-12 JST:
 
@@ -79,20 +81,22 @@ Local Windows verification on 2026-09-12 JST:
 - `:app:lintDebug` passed
 - `:app:assembleDebug` passed and produced `app/build/outputs/apk/debug/app-debug.apk`
 - the unit test suite is path-portable on Windows
-- no Android device was connected, so the required Gate A2 device scenarios remain open
 
-Required target-device proof:
+Target-device verification on 2026-09-12 JST:
 
-1. start a save,
-2. leave/recreate the Activity while acquisition is active,
-3. foreground notification continues showing progress,
-4. return to WMS and see the same source/job/progress/result,
-5. allow one job to finish and play the final MP3,
-6. cancel one job from WMS,
-7. cancel one job from notification,
-8. confirm canceled/failed jobs do not expose a successful partial final file and temporary job output is cleaned.
+- device: Redmi 12 5G (`23076RA4BR`), Android 15 / API 35
+- APK update installation passed
+- leaving WMS during acquisition kept the managed job/foreground notification alive
+- notification tap returned to WMS and the managed state remained available
+- successful acquisition produced a non-empty MP3 and `閉じて再生` played it through Media3
+- seek, elapsed/total time, 10-second skip, pause, and resume controls passed on device
+- WMS UI cancellation stopped the Service, removed the foreground notification, exposed no partial final MP3, and left the job cache empty
+- notification-action cancellation passed with the same cleanup result and no duplicate job
+- a controlled storage-permission failure surfaced a user-facing failure instead of success and cleaned temporary output
 
-Do not mark Gate A2 PASS until the above is verified on the target device.
+Verified code checkpoint: `3716ab5afe6d34821dfcddcb2d3b820afe66e1e1`.
+
+Gate A2 is LOCAL PASS. GitHub Actions and merge to `main` were intentionally not run.
 
 ## Actions / artifact policy
 

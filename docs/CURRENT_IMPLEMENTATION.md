@@ -1,6 +1,6 @@
 # Current Implementation
 
-Last updated: 2026-09-12 JST
+Last updated: 2026-09-13 JST
 
 ## Repository state
 
@@ -8,13 +8,9 @@ Repository: `goroyattemiyo/web-media-studio-android`
 
 Current active branch:
 
-`feat/gate-a2-managed-acquisition`
+`feat/gate-a3-local-library`
 
-Current PR:
-
-`#5 feat: Gate A2 managed foreground acquisition`
-
-PR #5 is intentionally **Draft** while Gate A2 is still awaiting CI + real-device verification.
+No Gate A3 PR has been created. Work is on the pushed remote branch only.
 
 Merged baseline on `main`:
 
@@ -97,6 +93,55 @@ Target-device verification on 2026-09-12 JST:
 Verified code checkpoint: `3716ab5afe6d34821dfcddcb2d3b820afe66e1e1`.
 
 Gate A2 is LOCAL PASS. GitHub Actions and merge to `main` were intentionally not run.
+
+## Gate A3 — checkpoint IN PROGRESS
+
+Current verified implementation checkpoint:
+
+`f301580c1235d6d9ba767ada2c9d3002d168e67b`
+
+Implemented:
+
+- app versionCode `7`, versionName `0.3.0-a3-local-library`
+- Room 2.8.5 database version 1 with committed schema JSON
+- future schema changes must use explicit Room migrations; no destructive fallback is configured
+- KSP 2.3.12 Room code generation
+- `MediaEntity`, `MediaDao`, `WmsDatabase`, and `MediaRepository`
+- title/provider/source URL/path/MIME/type/duration/file size/created time/last position persistence
+- acquisition success is exposed only after Room registration succeeds
+- registration failure removes the just-produced final file and reports `LIBRARY_REGISTER_FAILED`
+- first A3 launch imports existing non-empty MP3 files from the managed acquired-media directory
+- Library bottom-navigation screen with all-media cards
+- missing files are reported and cannot be played
+- confirmed deletion removes only files inside the WMS managed-media directory, then removes the Room row
+- selected media and playback position are persisted
+- Room-backed Mini Player remains visible above bottom navigation on Search and Library
+- repository unit tests cover registration, backfill, deletion, position clamping, and managed-path enforcement
+
+Local Windows verification on 2026-09-13 JST:
+
+- `:app:testDebugUnitTest` passed
+- `:app:lintDebug` passed
+- `:app:assembleDebug` passed
+- APK: `app/build/outputs/apk/debug/app-debug.apk`
+- APK SHA-256: `4F0F45844176A127AF120CEFC78D3E518669F7658F323969A809B2B6A603FE1B`
+
+Target-device checkpoint on Redmi 12 5G, Android 15 / API 35:
+
+- A3 APK update installation passed
+- Room database was created
+- the two existing non-empty MP3 files appeared through the Room-backed Mini Player/Library state
+- user confirmed Library shows both items and list playback works
+
+Still required before Gate A3 LOCAL PASS:
+
+1. restart/force-stop WMS and confirm the same Room rows, selection, and playback position return,
+2. delete the known duplicate test item and confirm both its Room row and managed file disappear while the other item remains playable,
+3. simulate or create a missing-file row and confirm graceful display/removal behavior on device,
+4. run the final local three-task verification after any fixes,
+5. update the Gate A3 checkpoint from IN PROGRESS to LOCAL PASS.
+
+No GitHub Actions or merge to `main` was run.
 
 ## Actions / artifact policy
 

@@ -110,13 +110,24 @@ Exit: an acquisition survives leaving the Activity and remains controllable.
 
 ## Gate A3 — Persistent Local Library
 
-- [ ] Room schema
-- [ ] media metadata persistence
+- [x] Room schema
+- [x] media metadata persistence
 - [ ] app-specific media file lifecycle
-- [ ] All media list
+- [x] All media list
 - [ ] delete from WMS
 - [ ] reopen app and retain library
-- [ ] persistent Mini Player shell above bottom navigation when media is loaded
+- [x] persistent Mini Player shell above bottom navigation when media is loaded
+
+Checkpoint on 2026-09-13 JST:
+
+- Room 2.8.5 schema v1 and KSP-generated implementation compile successfully
+- acquisition completion registers metadata before publishing success
+- existing managed MP3 files are backfilled on first A3 launch
+- repository registration/backfill/deletion/position/path-safety unit tests pass
+- local `testDebugUnitTest`, `lintDebug`, and `assembleDebug` pass
+- target device shows both existing items in Library and list playback passes
+- verified implementation checkpoint: `f301580c1235d6d9ba767ada2c9d3002d168e67b`
+- restart persistence, device deletion, and missing-file behavior remain open
 
 Exit: acquired media survives app restart and remains playable.
 
@@ -211,4 +222,4 @@ Visualizer modes:
 
 ## Current priority
 
-**Gate A3 — Persistent Local Library.** Continue locally from the verified Gate A2 checkpoint without running GitHub Actions or merging to `main`.
+**Gate A3 — Persistent Local Library (IN PROGRESS).** Resume restart persistence, duplicate-item deletion, and missing-file device checks from `docs/GATE_A3_DEVICE_CHECK.md`. Do not run GitHub Actions or merge to `main`.

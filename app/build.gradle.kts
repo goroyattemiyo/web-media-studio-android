@@ -12,8 +12,8 @@ android {
         applicationId = "com.goroyattemiyo.wms"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.1.3-a1-safe-insets"
+        versionCode = 6
+        versionName = "0.2.0-a2-managed-acquisition"
 
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")

@@ -1,6 +1,6 @@
 # WMS Android Roadmap
 
-Last updated: 2026-09-12 JST
+Last updated: 2026-09-13 JST
 
 UI/UX source of truth:
 
@@ -159,20 +159,22 @@ Checkpoint on 2026-09-13 JST:
 
 ## Gate A5 — Native background playback + Now Playing
 
-- [ ] `MediaLibraryService`
-- [ ] `MediaSession`
-- [ ] ExoPlayer service ownership
-- [ ] audio focus
-- [ ] notification/system controls
-- [ ] screen-off playback
-- [ ] screen-off Next
-- [ ] queue/position restore
-- [ ] full native Now Playing screen
-- [ ] WMS visualizer renderer boundary
-- [ ] lightweight visual modes (`emblem`, `pulse`, `orbit`, `bars`, `wave`, `minimal`)
-- [ ] audio-analysis data-source boundary for audio-reactive visualizers
+- [x] `MediaLibraryService`
+- [x] `MediaSession`
+- [x] ExoPlayer service ownership
+- [x] audio focus
+- [x] notification/system controls
+- [x] screen-off playback
+- [x] screen-off Next
+- [x] queue/position restore
+- [x] full native Now Playing screen
+- [x] WMS visualizer renderer boundary
+- [x] lightweight visual modes (`emblem`, `pulse`, `orbit`, `bars`, `wave`, `minimal`)
+- [x] audio-analysis data-source boundary for audio-reactive visualizers
 
 Exit: target Android device continues local playlist playback with screen locked and system Play/Pause/Next works, with the WMS player identity in place.
+
+**Gate A5: LOCAL PASS — verified locally and on the target Android device on 2026-09-13 JST.**
 
 ## Gate A6 — Production-quality UX + WMS appearance parity
 
@@ -238,4 +240,4 @@ Visualizer modes:
 
 ## Current priority
 
-**Gate A5 — Native background playback + Now Playing.** Continue locally from the verified Gate A4 checkpoint. Do not run GitHub Actions or merge to `main`.
+**Gate A6 — Production-quality UX + WMS appearance parity.** Continue locally from the verified Gate A5 checkpoint. Do not run GitHub Actions or merge to `main`.

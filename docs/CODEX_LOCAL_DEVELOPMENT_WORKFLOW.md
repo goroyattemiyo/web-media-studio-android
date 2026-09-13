@@ -572,6 +572,25 @@ Expected scope:
 
 This Gate requires careful real-device verification. Do not claim local PASS without testing background/screen-off behavior on the target Android device.
 
+Current Gate A5 checkpoint on 2026-09-13 JST:
+
+```text
+branch: feat/gate-a5-background-playback
+verified implementation: 1cc703d09eae5dd89bf78e5ee8c1246889e3ab0c
+status: LOCAL PASS
+```
+
+`MediaLibraryService`/`MediaSession`, service-owned ExoPlayer, audio focus, foreground
+media notification, system controls, queue/position restore, native Now Playing, and the
+WMS visualizer boundaries and six lightweight modes are implemented. Local
+`testDebugUnitTest`, `lintDebug`, and `assembleDebug` pass.
+
+On Redmi 12 5G / Android 15, playback continued after Home and with the screen off,
+system Play/Pause/Next worked, screen-off Next advanced the active playlist, and a
+force-stop/restart restored the three-item queue, active item, and saved position. See
+`docs/GATE_A5_DEVICE_CHECK.md` for the evidence. GitHub Actions and merge to `main`
+were not run.
+
 ## Gates A6–A8
 
 Codex may continue beyond A5 according to `docs/ROADMAP.md`, but preserve the same rules:

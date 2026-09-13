@@ -8,9 +8,9 @@ Repository: `goroyattemiyo/web-media-studio-android`
 
 Current active branch:
 
-`feat/gate-a4-playlists`
+`feat/gate-a5-background-playback`
 
-Gate A4 is LOCAL PASS on its feature branch. No GitHub Actions run or merge to `main` was performed.
+Gate A5 is LOCAL PASS on its feature branch. No GitHub Actions run or merge to `main` was performed.
 
 Merged baseline on `main`:
 
@@ -220,13 +220,34 @@ MediaAcquisitionEngine / ManagedAcquisitionService
 
 Search support and acquisition support remain separate capabilities. A source must not be described as downloadable merely because it appears in Search.
 
+## Gate A5 — LOCAL PASS
+
+Verified on 2026-09-13 JST at `1cc703d09eae5dd89bf78e5ee8c1246889e3ab0c`.
+
+Implemented and verified:
+
+- app versionCode `9`, versionName `0.5.0-a5-background-playback`
+- `MediaLibraryService` owns ExoPlayer and a `MediaLibrarySession`
+- the Compose UI connects through a Media3 `MediaController`
+- media audio attributes, audio-focus handling, and becoming-noisy handling
+- foreground media notification and system Play/Pause/Previous/Next controls
+- persisted playlist queue, active index, and playback position restoration
+- full native Now Playing view with WMS emblem presentation
+- visualizer renderer and future audio-analysis data-source boundaries
+- lightweight `emblem`, `pulse`, `orbit`, `bars`, `wave`, and `minimal` modes
+- screen-off playback and screen-off Next on the target Android device
+- service/process restart restored a three-item queue paused at the saved item and position
+- local `testDebugUnitTest`, `lintDebug`, and `assembleDebug` passed
+- APK SHA-256: `80ACD8D9AF0AEE8AE2D9F2FD21B0EA88679E38F12566604597AEBE73491FE6D0`
+
+See `docs/GATE_A5_DEVICE_CHECK.md` for the device evidence.
+
 ## Deferred to later gates
 
-Gate A5+:
+Gate A6+:
 
-- MediaLibraryService / MediaSession background playback
-- screen-off playback/system controls
-- production skins and visualizers
+- production skin system and appearance settings
+- audio-reactive production visualizers using the Gate A5 analysis boundary
 - broader provider matrix
 
 ## Product/security boundaries
@@ -242,4 +263,4 @@ Gate A5+:
 
 ## Next engineering step
 
-Create `feat/gate-a5-background-playback` from the verified Gate A4 head and implement Gate A5 locally. Do not run GitHub Actions or merge to `main`.
+Create `feat/gate-a6-production-ux` from the verified Gate A5 head and implement Gate A6 locally. Do not run GitHub Actions or merge to `main`.

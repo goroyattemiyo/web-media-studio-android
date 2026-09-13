@@ -538,7 +538,7 @@ Current Gate A4 checkpoint on 2026-09-13 JST:
 
 ```text
 branch: feat/gate-a4-playlists
-status: IN PROGRESS — local automation PASS, device exit checks pending
+status: LOCAL PASS — local automation and target-device exit checks passed
 ```
 
 Room schema v2 with an explicit v1-to-v2 migration, playlist CRUD, ordered entries,
@@ -546,9 +546,10 @@ import-time playlist selection, persisted active-queue selection, and Previous/N
 implemented. Repository unit tests and local `testDebugUnitTest`, `lintDebug`, and
 `assembleDebug` pass. The APK installed over retained A3 data without a migration crash.
 
-On resume, unlock the target device and verify create/rename/delete, multiple-item add and
-reorder, restart persistence, ordered Previous/Next, and acquisition into the selected
-playlist. Do not mark Gate A4 LOCAL PASS until those device checks pass.
+Target-device create/rename/delete, multiple-item add and reorder, restart persistence,
+ordered Previous/Next, and acquisition into the selected playlist all passed. The final
+import flow defaults to the active playlist and explicitly displays its destination.
+Gate A4 is LOCAL PASS at `d496b42dd721edcf83cf7083a14fa1919cf425e5`.
 
 ## Gate A5 target — Background playback / MediaSession / Now Playing
 

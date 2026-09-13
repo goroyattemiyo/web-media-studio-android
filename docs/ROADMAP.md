@@ -136,11 +136,11 @@ Exit: acquired media survives app restart and remains playable.
 
 ## Gate A4 — Persistent playlists
 
-- [ ] playlist create/rename/delete
-- [ ] ordered entries
-- [ ] add acquired item during import
-- [ ] active queue restore
-- [ ] previous/next
+- [x] playlist create/rename/delete
+- [x] ordered entries
+- [x] add acquired item during import
+- [x] active queue restore
+- [x] previous/next
 
 Exit: named playlists and order survive restart.
 
@@ -151,9 +151,11 @@ Checkpoint on 2026-09-13 JST:
 - playlist repository ordering tests pass
 - local `testDebugUnitTest`, `lintDebug`, and `assembleDebug` pass
 - A4 APK installed over retained A3 app data without a migration crash
-- real-device playlist operations, restart/order persistence, ordered playback, and import-time addition remain to be verified
+- real-device create/rename/delete, restart/order persistence, and ordered Previous/Next passed
+- import destination now defaults to the active playlist, is shown explicitly before saving, and completed acquisition into that playlist passed
+- final A4 APK SHA-256: `BB4ED94A75F391BC1C4A48D0A2B7F64C33938F3030B4468C31AFA36E7986F728`
 
-**Gate A4: IN PROGRESS — implementation and local automation pass; real-device exit checks are pending.**
+**Gate A4: LOCAL PASS — verified locally and on the target Android device on 2026-09-13 JST.**
 
 ## Gate A5 — Native background playback + Now Playing
 
@@ -236,4 +238,4 @@ Visualizer modes:
 
 ## Current priority
 
-**Gate A4 — Persistent playlists.** Continue locally from the verified Gate A3 checkpoint. Do not run GitHub Actions or merge to `main`.
+**Gate A5 — Native background playback + Now Playing.** Continue locally from the verified Gate A4 checkpoint. Do not run GitHub Actions or merge to `main`.

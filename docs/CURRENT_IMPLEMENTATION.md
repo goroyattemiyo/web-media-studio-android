@@ -10,7 +10,7 @@ Current active branch:
 
 `feat/gate-a4-playlists`
 
-Gate A4 work is on its feature branch. No GitHub Actions run or merge to `main` has been requested.
+Gate A4 is LOCAL PASS on its feature branch. No GitHub Actions run or merge to `main` was performed.
 
 Merged baseline on `main`:
 
@@ -142,9 +142,9 @@ Gate A3 is LOCAL PASS at code checkpoint `f301580c1235d6d9ba767ada2c9d3002d168e6
 
 No GitHub Actions or merge to `main` was run.
 
-## Gate A4 — implementation checkpoint
+## Gate A4 — LOCAL PASS
 
-Checkpoint recorded on 2026-09-13 JST. Gate A4 is not yet LOCAL PASS.
+Verified on 2026-09-13 JST at `d496b42dd721edcf83cf7083a14fa1919cf425e5`.
 
 Implemented locally:
 
@@ -153,6 +153,7 @@ Implemented locally:
 - playlist and ordered-entry entities, DAO, repository, and persistence
 - playlist create, rename, delete, add, remove, and reorder UI
 - optional playlist selection during acquisition; registration is rolled back if playlist insertion fails
+- the active playlist is the default import destination and the destination is displayed explicitly before saving
 - persisted active-playlist selection and Mini Player Previous/Next controls based on its ordered entries
 - repository unit tests for name validation, duplicate prevention, dense ordering, move, and removal
 
@@ -161,13 +162,12 @@ Verified at this checkpoint:
 - `testDebugUnitTest`, `lintDebug`, and `assembleDebug` pass locally
 - the A4 APK installs over the existing A3 app data without a Room migration crash
 - device package reports version `0.4.0-a4-playlists` / versionCode `8`
-
-Still required before Gate A4 LOCAL PASS:
-
-- unlock the target device and exercise playlist create/rename/delete
-- add multiple items, reorder, restart, and verify persistent order
-- verify Previous/Next against the restored active queue
-- verify a completed acquisition is added to the selected playlist
+- playlist create, rename, delete, add, remove, and reorder passed on Redmi 12 5G / Android 15
+- selected playlist and entry order survived force-stop and restart
+- ordered Previous/Next played the expected real managed files
+- an authorized acquisition increased `GateA4＿Mix` from two to three entries and the new item played
+- final `testDebugUnitTest`, `lintDebug`, and `assembleDebug` all passed
+- final APK SHA-256 is `BB4ED94A75F391BC1C4A48D0A2B7F64C33938F3030B4468C31AFA36E7986F728`
 
 ## Actions / artifact policy
 
@@ -222,10 +222,6 @@ Search support and acquisition support remain separate capabilities. A source mu
 
 ## Deferred to later gates
 
-Gate A4 verification still pending:
-
-- real-device playlist persistence, ordered playback, and import-time addition
-
 Gate A5+:
 
 - MediaLibraryService / MediaSession background playback
@@ -246,4 +242,4 @@ Gate A5+:
 
 ## Next engineering step
 
-Resume Gate A4 real-device verification from the installed `0.4.0-a4-playlists` APK. Do not run GitHub Actions or merge to `main`.
+Create `feat/gate-a5-background-playback` from the verified Gate A4 head and implement Gate A5 locally. Do not run GitHub Actions or merge to `main`.

@@ -12,16 +12,18 @@ The Web/PWA repository remains the browser implementation and cross-platform ref
 
 ## Current phase
 
-**Gate A0 — prove local acquisition on a real Android device.**
+Gates A0–A7 are LOCAL PASS. The current branch is completing Gate A8 development
+distribution: repeatable local verification, versioned private debug APKs, update
+installation checks, and documented signing/rollback boundaries.
 
-Before building the full player/library UI, this repository must prove that an Android device can:
+Run the complete local verification and create a checksum-paired APK in ignored `dist/`:
 
-1. accept or paste a permitted public media URL,
-2. probe it locally,
-3. save an audio file locally without Colab or Cloud Run extraction,
-4. play the produced local file through AndroidX Media3.
+```powershell
+.\scripts\local-verify.ps1
+```
 
-Gate A0 deliberately has a small diagnostic UI. Full playlists, Room persistence, `MediaLibraryService`, background playback and polished WMS UI follow only after this gate passes.
+See `docs/CURRENT_IMPLEMENTATION.md` and `docs/DEVELOPMENT_DISTRIBUTION.md` for the
+verified feature set and distribution procedure.
 
 ## Stack target
 

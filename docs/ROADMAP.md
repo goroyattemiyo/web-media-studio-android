@@ -202,12 +202,14 @@ Exit: normal use looks and feels like native WMS rather than a developer diagnos
 For each candidate provider, record search/probe/acquire/playback results on the target device where applicable.
 
 - [x] YouTube public — Gate A0/Gate A1 verified path
-- [ ] direct public media URL provider-specific matrix entry
-- [ ] TikTok public
-- [ ] Instagram public/no-login-accessible
+- [x] direct public media URL provider-specific matrix entry
+- [x] TikTok public — deliberately skipped; no support claim
+- [x] Instagram public/no-login-accessible
 - [ ] additional sources only after explicit testing
 
 Search support and acquisition support are separate capabilities. Never mark a provider supported merely because yt-dlp has an extractor or a Search UI entry exists.
+
+**Gate A7: LOCAL PASS — Direct public media and Instagram Reel verified on the target device on 2026-09-13 JST; TikTok explicitly skipped.**
 
 ## Gate A8 — Development distribution
 
@@ -242,4 +244,4 @@ Visualizer modes:
 
 ## Current priority
 
-**Gate A7 — Provider matrix.** Continue locally from the verified Gate A6 checkpoint, testing and documenting one provider at a time. Do not run GitHub Actions or merge to `main`.
+**Gate A8 — Development distribution.** Continue locally from the verified Gate A7 checkpoint without running GitHub Actions unless explicitly approved. Do not merge to `main`.

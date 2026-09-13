@@ -8,9 +8,9 @@ Repository: `goroyattemiyo/web-media-studio-android`
 
 Current active branch:
 
-`feat/gate-a6-production-ux`
+`feat/gate-a7-provider-matrix`
 
-Gate A6 is LOCAL PASS on its feature branch. No GitHub Actions run or merge to `main` was performed.
+Gate A7 is LOCAL PASS on its feature branch. No GitHub Actions run or merge to `main` was performed.
 
 Merged baseline on `main`:
 
@@ -263,11 +263,29 @@ Implemented and verified:
 
 See `docs/GATE_A6_DEVICE_CHECK.md` for the device evidence.
 
+## Gate A7 — LOCAL PASS
+
+Verified on 2026-09-13 JST at `f6430929763821d836cfc36d2cc2d7d48bcf04d2`.
+
+Implemented and verified:
+
+- app versionCode `11`, versionName `0.7.0-a7-provider-matrix`
+- provider identity catalog separates provider recognition from keyword-search capability
+- host normalization tests cover YouTube, TikTok, Instagram, direct web, and suffix spoofing
+- public-domain Wikimedia direct URL passed Probe, MP3 acquisition, Library registration, and playback
+- a public no-login Instagram Reel passed Probe, MP4 acquisition, Library registration, and native video playback
+- a login-required Instagram post was classified `LOGIN_REQUIRED` without cookie or login bypass
+- a TikTok landing page was rejected as `UNSUPPORTED_SOURCE`; TikTok post evaluation was explicitly skipped by user decision
+- local `testDebugUnitTest`, `lintDebug`, and `assembleDebug` passed
+- APK SHA-256: `2F529B4E92D3555AE26FADBCC87A786CA6BF5EB171F00DB8E0A01EEA04BA3F04`
+
+See `docs/GATE_A7_PROVIDER_MATRIX.md` for the complete matrix and device evidence.
+
 ## Deferred to later gates
 
-Gate A7+:
+Gate A8:
 
-- broader provider matrix
+- repeatable development distribution and rollback documentation
 
 ## Product/security boundaries
 
@@ -282,4 +300,4 @@ Gate A7+:
 
 ## Next engineering step
 
-Create a Gate A7 provider-matrix branch from the verified Gate A6 head and test providers one at a time. Do not run GitHub Actions or merge to `main`.
+Create a Gate A8 development-distribution branch from the verified Gate A7 head. Keep GitHub Actions disabled unless explicitly approved and do not merge to `main`.

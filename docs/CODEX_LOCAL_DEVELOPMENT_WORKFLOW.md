@@ -611,7 +611,26 @@ acquired and played through the WMS MediaSession, and MP4 was acquired and playe
 the native video surface. See `docs/GATE_A6_DEVICE_CHECK.md`. GitHub Actions and merge
 to `main` were not run.
 
-## Gates A7–A8
+## Gate A7 target — Provider matrix
+
+Current Gate A7 checkpoint on 2026-09-13 JST:
+
+```text
+branch: feat/gate-a7-provider-matrix
+verified implementation: f6430929763821d836cfc36d2cc2d7d48bcf04d2
+status: LOCAL PASS
+```
+
+Provider identity is independently testable and does not imply Search or acquisition
+support. Direct public media and a public Instagram Reel passed Probe, acquisition,
+Library registration, and playback on Redmi 12 5G / Android 15. A login-required
+Instagram post stayed outside the cookie/login boundary. TikTok was explicitly skipped
+without a support claim. See `docs/GATE_A7_PROVIDER_MATRIX.md`.
+
+Local `testDebugUnitTest`, `lintDebug`, and `assembleDebug` pass. GitHub Actions and
+merge to `main` were not run.
+
+## Gate A8
 
 Codex may continue beyond A6 according to `docs/ROADMAP.md`, but preserve the same rules:
 

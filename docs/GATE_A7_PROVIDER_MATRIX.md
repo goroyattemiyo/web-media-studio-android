@@ -4,7 +4,11 @@ Last updated: 2026-09-13 JST
 
 Branch: `feat/gate-a7-provider-matrix`
 
-Status: **IN PROGRESS**
+Status: **LOCAL PASS**
+
+Verified implementation checkpoint: `f6430929763821d836cfc36d2cc2d7d48bcf04d2`
+
+APK SHA-256: `2F529B4E92D3555AE26FADBCC87A786CA6BF5EB171F00DB8E0A01EEA04BA3F04`
 
 Search, Probe, Acquire, and Playback are recorded independently. A provider is never
 marked supported solely because yt-dlp contains an extractor.
@@ -49,3 +53,13 @@ marked supported solely because yt-dlp contains an extractor.
 - Do not add cookies, login automation, proxy rotation, arbitrary yt-dlp flags, or bypasses.
 - Keep the rights-confirmation step mandatory for every acquisition.
 - Record a tested failure honestly; do not broaden support claims to an entire provider.
+
+## Local verification
+
+- [x] Gradle Wrapper 8.13 with JDK 17
+- [x] `testDebugUnitTest`
+- [x] `lintDebug` (0 errors)
+- [x] `assembleDebug`
+- [x] versionCode 11 / `0.7.0-a7-provider-matrix` installed over retained Gate A6 data
+
+Gate A7 is LOCAL PASS. GitHub Actions and merge to `main` were not run.

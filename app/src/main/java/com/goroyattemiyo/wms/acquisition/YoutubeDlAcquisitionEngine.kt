@@ -271,14 +271,7 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
     }
 
     private fun providerFor(raw: String): String {
-        val host = runCatching { URI(raw.trim()).host?.lowercase().orEmpty() }.getOrDefault("")
-        return when {
-            host == "youtu.be" || host == "youtube.com" || host.endsWith(".youtube.com") -> "YouTube"
-            host == "tiktok.com" || host.endsWith(".tiktok.com") -> "TikTok"
-            host == "instagram.com" || host.endsWith(".instagram.com") -> "Instagram"
-            host.isNotBlank() -> host
-            else -> "Web"
-        }
+        return SourceProviderCatalog.identify(raw).displayName
     }
 
     private fun safeProgressMessage(line: String, preset: AcquisitionPreset): String {

@@ -130,6 +130,7 @@ private fun WmsRoot(
     var playRequest by remember { mutableIntStateOf(0) }
     var selectedTab by remember { mutableStateOf(AppTab.SEARCH) }
     var importPlaylistId by remember { mutableStateOf<String?>(null) }
+    var initializedImportUrl by remember { mutableStateOf<String?>(null) }
 
     val selectedMedia = libraryMedia.firstOrNull { it.id == selectedMediaId }
         ?: libraryMedia.firstOrNull()
@@ -147,12 +148,18 @@ private fun WmsRoot(
         }
     }
 
-    LaunchedEffect(acquisitionState.url) {
+    LaunchedEffect(acquisitionState.url, selectedPlaylistId) {
         if (acquisitionState.url.isNotBlank()) {
+            if (initializedImportUrl != acquisitionState.url) {
+                importPlaylistId = selectedPlaylistId
+                initializedImportUrl = acquisitionState.url
+            }
             importOpen = true
             if (!acquisitionState.probing && acquisitionState.detectedTitle == null) {
                 acquisitionViewModel.probe()
             }
+        } else {
+            initializedImportUrl = null
         }
     }
 
@@ -647,6 +654,16 @@ private fun ImportSheet(
                         }
                     }
                 }
+                val destinationName = playlists
+                    .firstOrNull { it.id == selectedPlaylistId }
+                    ?.name
+                    ?: "Libraryのみ"
+                Text(
+                    "保存先: $destinationName",
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                )
             }
 
             Button(

@@ -8,9 +8,9 @@ Repository: `goroyattemiyo/web-media-studio-android`
 
 Current active branch:
 
-`feat/gate-a7-provider-matrix`
+`feat/gate-a8-development-distribution`
 
-Gate A7 is LOCAL PASS on its feature branch. No GitHub Actions run or merge to `main` was performed.
+Gate A8 is LOCAL PASS on its feature branch. No GitHub Actions run, Release creation, or merge to `main` was performed.
 
 Merged baseline on `main`:
 
@@ -281,11 +281,31 @@ Implemented and verified:
 
 See `docs/GATE_A7_PROVIDER_MATRIX.md` for the complete matrix and device evidence.
 
-## Deferred to later gates
+## Gate A8 — LOCAL PASS
 
-Gate A8:
+Verified on 2026-09-14 JST at `7b738b943f0572cace827e582461f07f69b6b874`.
 
-- repeatable development distribution and rollback documentation
+Implemented and verified:
+
+- app versionCode `12`, versionName `0.8.0-a8-dev-distribution`
+- `scripts/local-verify.ps1` runs unit tests, lint, and APK build before publishing a local artifact
+- versioned artifact names contain versionName, versionCode, and clean Git checkpoint; dirty builds are labeled `-dirty`
+- a sibling SHA-256 file is produced for every local distribution artifact
+- optional `-Install -Serial <serial>` performs an `adb install -r` update and verifies the installed package version
+- dedicated development-keystore/secrets strategy and certificate continuity are documented without adding secrets
+- update and rollback procedures explicitly protect Room/DataStore and managed media from destructive uninstall
+- clean artifact: `wms-android-0.8.0-a8-dev-distribution-v12-7b738b943f05-debug.apk`
+- APK SHA-256: `F24F2AB335EF4287C9BF61468D195E7C8ED7516657A050734C2B908742FE03B6`
+- current local debug certificate SHA-256: `31cec40b17394a7e722f17ca337e94818a2393e3472c665256cd8c76934ba4d9`
+- versionCode 12 updated over A7 on Redmi 12 5G / Android 15 while retaining Room, DataStore, nine managed media files, and playback
+
+See `docs/DEVELOPMENT_DISTRIBUTION.md` and `docs/GATE_A8_DEVICE_CHECK.md`.
+
+## Deferred external approval boundary
+
+- final GitHub CI run
+- optional private Release creation
+- merge to `main`
 
 ## Product/security boundaries
 
@@ -300,4 +320,4 @@ Gate A8:
 
 ## Next engineering step
 
-Create a Gate A8 development-distribution branch from the verified Gate A7 head. Keep GitHub Actions disabled unless explicitly approved and do not merge to `main`.
+All roadmap Gates are LOCAL PASS. Stop before GitHub Actions, Release creation, or merge to `main` unless the user explicitly approves those external actions.

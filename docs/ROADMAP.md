@@ -213,12 +213,12 @@ Search support and acquisition support are separate capabilities. Never mark a p
 
 ## Gate A8 — Development distribution
 
-- [ ] CI lint/test/build stable
-- [ ] repeatable debug APK artifact
-- [ ] development signing strategy via secrets if needed
-- [ ] install/update test
-- [ ] optional private GitHub Release APK
-- [ ] documented rollback/version procedure
+- [ ] final GitHub CI lint/test/build — intentionally not run without approval
+- [x] repeatable debug APK artifact
+- [x] development signing strategy via secrets if needed
+- [x] install/update test
+- [x] optional private GitHub Release APK — deliberately not created
+- [x] documented rollback/version procedure
 
 Actions usage policy from Gate A2 onward:
 
@@ -229,6 +229,8 @@ Actions usage policy from Gate A2 onward:
 - keep only the newest two WMS Android APK artifacts
 
 No Play Store work in the current plan.
+
+**Gate A8: LOCAL PASS — local distribution, checksum, signing strategy, update install, retained-data smoke test, and rollback procedure verified on 2026-09-14 JST. FINAL PASS remains pending the explicitly approved GitHub CI boundary.**
 
 ## Canonical WMS appearance IDs
 
@@ -244,4 +246,4 @@ Visualizer modes:
 
 ## Current priority
 
-**Gate A8 — Development distribution.** Continue locally from the verified Gate A7 checkpoint without running GitHub Actions unless explicitly approved. Do not merge to `main`.
+**Final approval boundary.** Gates A0–A8 are LOCAL PASS. Do not run GitHub Actions, create a Release, or merge to `main` without explicit approval.

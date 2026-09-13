@@ -630,9 +630,30 @@ without a support claim. See `docs/GATE_A7_PROVIDER_MATRIX.md`.
 Local `testDebugUnitTest`, `lintDebug`, and `assembleDebug` pass. GitHub Actions and
 merge to `main` were not run.
 
-## Gate A8
+## Gate A8 target — Development distribution
 
-Codex may continue beyond A6 according to `docs/ROADMAP.md`, but preserve the same rules:
+Current Gate A8 checkpoint on 2026-09-14 JST:
+
+```text
+branch: feat/gate-a8-development-distribution
+verified implementation: 7b738b943f0572cace827e582461f07f69b6b874
+status: LOCAL PASS
+```
+
+`scripts/local-verify.ps1` now produces versioned, checksum-paired local artifacts only
+after `testDebugUnitTest`, `lintDebug`, and `assembleDebug` pass. It distinguishes dirty
+worktrees and can perform and verify a data-preserving adb update install. Signing,
+certificate continuity, rollback, and destructive-uninstall boundaries are documented
+in `docs/DEVELOPMENT_DISTRIBUTION.md`.
+
+On Redmi 12 5G / Android 15, versionCode 12 installed over A7 and retained Room,
+Appearance DataStore, nine managed media files, and MediaSession playback. See
+`docs/GATE_A8_DEVICE_CHECK.md`.
+
+GitHub Actions, private Release creation, and merge to `main` were not run. Those remain
+explicit approval boundaries, so Gate A8 is LOCAL PASS rather than FINAL PASS.
+
+All roadmap Gates are now LOCAL PASS. Preserve these rules for any follow-up work:
 
 - one Gate per branch,
 - local verification first,
@@ -655,4 +676,4 @@ Library and Playlist are not placeholders once Gates A3 and A4 are implemented.
 
 When starting from this document:
 
-> Continue the current Gate to LOCAL PASS using local test/lint/build and required real-device checks. Do not use GitHub Actions as a development loop. Once a Gate reaches LOCAL PASS, document the checkpoint, push the Gate branch, create the next Gate branch from that verified head, and continue through the roadmap in order. Keep work in Draft/unmerged branches while Actions minutes are exhausted. Stop only for explicit approval boundaries listed in this document or when a blocking technical decision cannot be safely resolved from the repository architecture and roadmap.
+> Gates A0–A8 are LOCAL PASS. Keep the Gate A8 branch unmerged and do not run GitHub Actions, create a GitHub Release, or merge to `main` without explicit user approval. For follow-up changes, use local test/lint/build and required real-device checks before updating the documented checkpoint.

@@ -13,8 +13,8 @@ android {
         applicationId = "com.goroyattemiyo.wms"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8
-        versionName = "0.4.0-a4-playlists"
+        versionCode = 9
+        versionName = "0.5.0-a5-background-playback"
 
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
@@ -76,6 +76,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.10.0")
 
     implementation("androidx.media3:media3-exoplayer:1.9.3")
+    implementation("androidx.media3:media3-session:1.9.3")
 
     val room = "2.8.5"
     implementation("androidx.room:room-runtime:$room")

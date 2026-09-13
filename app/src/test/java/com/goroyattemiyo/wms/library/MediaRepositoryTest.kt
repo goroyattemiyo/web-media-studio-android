@@ -121,6 +121,8 @@ private class FakeMediaDao : MediaDao {
 
     override suspend fun getAll(): List<MediaEntity> = rows.value
 
+    override suspend fun getById(id: String): MediaEntity? = rows.value.firstOrNull { it.id == id }
+
     override suspend fun upsert(media: MediaEntity) {
         rows.value = rows.value.filterNot { it.id == media.id } + media
     }

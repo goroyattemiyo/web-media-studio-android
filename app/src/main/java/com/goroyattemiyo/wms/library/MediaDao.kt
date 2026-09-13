@@ -13,6 +13,9 @@ interface MediaDao {
     @Query("SELECT * FROM media")
     suspend fun getAll(): List<MediaEntity>
 
+    @Query("SELECT * FROM media WHERE id = :id LIMIT 1")
+    suspend fun getById(id: String): MediaEntity?
+
     @Upsert
     suspend fun upsert(media: MediaEntity)
 

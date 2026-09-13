@@ -1,5 +1,6 @@
 package com.goroyattemiyo.wms
 
+import android.content.ComponentName
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -8,6 +9,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -41,10 +43,16 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -56,6 +64,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -64,9 +73,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.C
-import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
+import androidx.core.content.ContextCompat
+import com.goroyattemiyo.wms.playback.PlaybackService
+import com.goroyattemiyo.wms.playback.AudioAnalysisFrame
+import com.goroyattemiyo.wms.playback.LightweightVisualizerRenderer
+import com.goroyattemiyo.wms.playback.VisualizerMode
+import com.goroyattemiyo.wms.playback.toPlaybackMediaItem
 import com.goroyattemiyo.wms.search.SearchMediaItem
 import com.goroyattemiyo.wms.library.LibraryViewModel
 import com.goroyattemiyo.wms.library.MediaEntity
@@ -127,14 +142,21 @@ private fun WmsRoot(
     var searchText by remember { mutableStateOf("") }
     var importOpen by remember { mutableStateOf(false) }
     var developerOpen by remember { mutableStateOf(false) }
-    var playRequest by remember { mutableIntStateOf(0) }
+    var nextPlaybackRequestId by remember { mutableIntStateOf(0) }
+    var playbackRequest by remember { mutableStateOf<PlaybackRequest?>(null) }
     var selectedTab by remember { mutableStateOf(AppTab.SEARCH) }
+    var nowPlayingOpen by remember { mutableStateOf(false) }
     var importPlaylistId by remember { mutableStateOf<String?>(null) }
     var initializedImportUrl by remember { mutableStateOf<String?>(null) }
 
     val selectedMedia = libraryMedia.firstOrNull { it.id == selectedMediaId }
         ?: libraryMedia.firstOrNull()
-    val activeQueueIndex = playlistItems.indexOfFirst { it.media.id == selectedMedia?.id }
+    val playbackController = rememberPlaybackController()
+
+    fun requestPlayback(media: MediaEntity, queue: List<MediaEntity>) {
+        nextPlaybackRequestId += 1
+        playbackRequest = PlaybackRequest(nextPlaybackRequestId, media.id, queue)
+    }
 
     LaunchedEffect(playlists, importPlaylistId) {
         if (importPlaylistId != null && playlists.none { it.id == importPlaylistId }) {
@@ -169,7 +191,12 @@ private fun WmsRoot(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.weight(1f)) {
-                when (selectedTab) {
+                if (nowPlayingOpen) {
+                    NowPlayingScreen(
+                        title = selectedMedia?.title.orEmpty(),
+                        onBack = { nowPlayingOpen = false },
+                    )
+                } else when (selectedTab) {
                     AppTab.SEARCH -> SearchHome(
                         acquisitionState = acquisitionState,
                         searchState = searchState,
@@ -203,7 +230,7 @@ private fun WmsRoot(
                         onPlay = { media ->
                             playlistViewModel.selectPlaylist(null)
                             libraryViewModel.select(media)
-                            playRequest += 1
+                            requestPlayback(media, listOf(media))
                         },
                         onDelete = libraryViewModel::delete,
                         onClearError = libraryViewModel::clearError,
@@ -224,7 +251,7 @@ private fun WmsRoot(
                         onMoveMedia = playlistViewModel::moveMedia,
                         onPlay = { media ->
                             libraryViewModel.select(media)
-                            playRequest += 1
+                            requestPlayback(media, playlistItems.map { it.media })
                         },
                         onClearError = playlistViewModel::clearError,
                     )
@@ -233,32 +260,24 @@ private fun WmsRoot(
 
             selectedMedia?.let { media ->
                 SavedMiniPlayer(
-                    path = media.localPath,
-                    title = media.title,
-                    playRequest = playRequest,
-                    initialPositionMs = media.lastPositionMs,
+                    controller = playbackController,
+                    media = media,
+                    playbackRequest = playbackRequest,
                     onPositionChanged = { positionMs ->
                         libraryViewModel.savePosition(media.id, positionMs)
                     },
-                    hasPrevious = activeQueueIndex > 0,
-                    hasNext = activeQueueIndex >= 0 && activeQueueIndex < playlistItems.lastIndex,
-                    onPrevious = {
-                        playlistItems.getOrNull(activeQueueIndex - 1)?.media?.let {
-                            libraryViewModel.select(it)
-                            playRequest += 1
-                        }
+                    onMediaTransition = { mediaId ->
+                        libraryMedia.firstOrNull { it.id == mediaId }?.let(libraryViewModel::select)
                     },
-                    onNext = {
-                        playlistItems.getOrNull(activeQueueIndex + 1)?.media?.let {
-                            libraryViewModel.select(it)
-                            playRequest += 1
-                        }
-                    },
+                    onOpenNowPlaying = { nowPlayingOpen = true },
                 )
             }
             BottomNavigation(
                 selectedTab = selectedTab,
-                onSelect = { selectedTab = it },
+                onSelect = {
+                    nowPlayingOpen = false
+                    selectedTab = it
+                },
             )
         }
     }
@@ -277,7 +296,12 @@ private fun WmsRoot(
             onDiagnostics = acquisitionViewModel::runDiagnostics,
             onCloseAndPlay = {
                 importOpen = false
-                playRequest += 1
+                val savedMedia = acquisitionState.savedPath?.let { savedPath ->
+                    libraryMedia.firstOrNull {
+                        File(it.localPath).absolutePath == File(savedPath).absolutePath
+                    }
+                } ?: selectedMedia
+                savedMedia?.let { requestPlayback(it, listOf(it)) }
             },
         )
     }
@@ -773,6 +797,12 @@ private enum class AppTab {
     PLAYLIST,
 }
 
+private data class PlaybackRequest(
+    val requestId: Int,
+    val mediaId: String,
+    val queue: List<MediaEntity>,
+)
+
 @Composable
 private fun LibraryScreen(
     media: List<MediaEntity>,
@@ -1126,28 +1156,26 @@ private fun PlaylistNameDialog(
 
 @Composable
 private fun SavedMiniPlayer(
-    path: String,
-    title: String,
-    playRequest: Int,
-    initialPositionMs: Long,
+    controller: MediaController?,
+    media: MediaEntity,
+    playbackRequest: PlaybackRequest?,
     onPositionChanged: (Long) -> Unit,
-    hasPrevious: Boolean,
-    hasNext: Boolean,
-    onPrevious: () -> Unit,
-    onNext: () -> Unit,
+    onMediaTransition: (String) -> Unit,
+    onOpenNowPlaying: () -> Unit,
 ) {
-    val context = LocalContext.current
-    val player = remember { ExoPlayer.Builder(context).build() }
-    val fileAvailable = remember(path) { File(path).let { it.exists() && it.length() > 0L } }
+    val fileAvailable = remember(media.localPath) {
+        File(media.localPath).let { it.exists() && it.length() > 0L }
+    }
     var isPlaying by remember { mutableStateOf(false) }
     var playbackState by remember { mutableIntStateOf(Player.STATE_IDLE) }
     var positionMs by remember { mutableLongStateOf(0L) }
     var durationMs by remember { mutableLongStateOf(0L) }
     var isSeeking by remember { mutableStateOf(false) }
-    var seekFraction by remember { mutableStateOf(0f) }
-    var lastPersistedPositionMs by remember(path) { mutableLongStateOf(initialPositionMs) }
+    var seekFraction by remember { mutableFloatStateOf(0f) }
+    var lastPersistedPositionMs by remember(media.id) { mutableLongStateOf(media.lastPositionMs) }
 
-    DisposableEffect(player) {
+    DisposableEffect(controller) {
+        if (controller == null) return@DisposableEffect onDispose {}
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(playing: Boolean) {
                 isPlaying = playing
@@ -1156,45 +1184,37 @@ private fun SavedMiniPlayer(
             override fun onPlaybackStateChanged(state: Int) {
                 playbackState = state
             }
+
+            override fun onMediaItemTransition(item: androidx.media3.common.MediaItem?, reason: Int) {
+                item?.mediaId?.takeIf(String::isNotBlank)?.let(onMediaTransition)
+            }
         }
-        player.addListener(listener)
+        controller.addListener(listener)
+        isPlaying = controller.isPlaying
+        playbackState = controller.playbackState
+        controller.currentMediaItem?.mediaId?.takeIf(String::isNotBlank)?.let(onMediaTransition)
         onDispose {
-            player.removeListener(listener)
-            player.release()
+            controller.removeListener(listener)
         }
     }
 
-    LaunchedEffect(path) {
-        val file = File(path)
-        player.stop()
-        player.clearMediaItems()
-        playbackState = Player.STATE_IDLE
-        positionMs = 0L
-        durationMs = 0L
-        isSeeking = false
-        if (file.exists() && file.length() > 0L) {
-            player.setMediaItem(MediaItem.fromUri(Uri.fromFile(file)))
-            player.prepare()
-            if (initialPositionMs > 0L) player.seekTo(initialPositionMs)
-        }
-    }
-
-    LaunchedEffect(player, path) {
+    LaunchedEffect(controller) {
         while (true) {
-            val knownDuration = player.duration
+            val knownDuration = controller?.duration ?: C.TIME_UNSET
             durationMs = if (knownDuration == C.TIME_UNSET || knownDuration < 0L) {
                 0L
             } else {
                 knownDuration
             }
             if (!isSeeking) {
-                positionMs = player.currentPosition.coerceIn(0L, durationMs.coerceAtLeast(0L))
+                positionMs = (controller?.currentPosition ?: 0L)
+                    .coerceIn(0L, durationMs.coerceAtLeast(0L))
             }
-            if (player.isPlaying && kotlin.math.abs(positionMs - lastPersistedPositionMs) >= 5_000L) {
+            if (controller?.isPlaying == true && kotlin.math.abs(positionMs - lastPersistedPositionMs) >= 5_000L) {
                 lastPersistedPositionMs = positionMs
                 onPositionChanged(positionMs)
             }
-            delay(if (player.isPlaying) 250L else 750L)
+            delay(if (controller?.isPlaying == true) 250L else 750L)
         }
     }
 
@@ -1217,15 +1237,21 @@ private fun SavedMiniPlayer(
         else -> "Local · 準備中"
     }
 
-    LaunchedEffect(playRequest, path) {
-        if (playRequest > 0) {
-            val file = File(path)
-            if (file.exists() && file.length() > 0L) {
-                if (player.mediaItemCount == 0) {
-                    player.setMediaItem(MediaItem.fromUri(Uri.fromFile(file)))
-                    player.prepare()
-                }
-                player.playWhenReady = true
+    LaunchedEffect(controller, playbackRequest) {
+        if (controller != null && playbackRequest != null) {
+            val playableQueue = playbackRequest.queue.filter { item ->
+                File(item.localPath).let { it.exists() && it.length() > 0L }
+            }
+            val startIndex = playableQueue.indexOfFirst { it.id == playbackRequest.mediaId }
+            if (startIndex >= 0) {
+                val requestedMedia = playableQueue[startIndex]
+                controller.setMediaItems(
+                    playableQueue.map(MediaEntity::toPlaybackMediaItem),
+                    startIndex,
+                    requestedMedia.lastPositionMs.coerceAtLeast(0L),
+                )
+                controller.prepare()
+                controller.play()
             }
         }
     }
@@ -1266,7 +1292,7 @@ private fun SavedMiniPlayer(
                     verticalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
                     Text(
-                        text = title,
+                        text = media.title,
                         fontWeight = FontWeight.Bold,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
@@ -1276,6 +1302,7 @@ private fun SavedMiniPlayer(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall,
                     )
+                    TextButton(onClick = onOpenNowPlaying) { Text("Now Playing") }
                 }
             }
 
@@ -1287,14 +1314,14 @@ private fun SavedMiniPlayer(
                 },
                 onValueChangeFinished = {
                     val targetMs = (seekFraction * durationMs).toLong().coerceIn(0L, durationMs)
-                    player.seekTo(targetMs)
+                    controller?.seekTo(targetMs)
                     positionMs = targetMs
                     lastPersistedPositionMs = targetMs
                     onPositionChanged(targetMs)
                     isSeeking = false
                 },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = fileAvailable && durationMs > 0L,
+                enabled = controller != null && fileAvailable && durationMs > 0L,
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1317,43 +1344,43 @@ private fun SavedMiniPlayer(
             ) {
                 OutlinedButton(
                     onClick = {
-                        val targetMs = (player.currentPosition - 10_000L).coerceAtLeast(0L)
-                        player.seekTo(targetMs)
+                        val targetMs = ((controller?.currentPosition ?: 0L) - 10_000L).coerceAtLeast(0L)
+                        controller?.seekTo(targetMs)
                         positionMs = targetMs
                         lastPersistedPositionMs = targetMs
                         onPositionChanged(targetMs)
                     },
                     modifier = Modifier.weight(1f),
-                    enabled = fileAvailable && durationMs > 0L,
+                    enabled = controller != null && fileAvailable && durationMs > 0L,
                 ) {
                     Text("−10秒")
                 }
                 Button(
                     onClick = {
-                        if (player.isPlaying) {
-                            player.pause()
-                            lastPersistedPositionMs = player.currentPosition
-                            onPositionChanged(player.currentPosition)
+                        if (controller?.isPlaying == true) {
+                            controller.pause()
+                            lastPersistedPositionMs = controller.currentPosition
+                            onPositionChanged(controller.currentPosition)
                         } else {
-                            if (player.playbackState == Player.STATE_ENDED) player.seekTo(0L)
-                            player.play()
+                            if (controller?.playbackState == Player.STATE_ENDED) controller.seekTo(0L)
+                            controller?.play()
                         }
                     },
                     modifier = Modifier.weight(1.4f),
-                    enabled = fileAvailable,
+                    enabled = controller != null && fileAvailable,
                 ) {
                     Text(if (isPlaying) "一時停止" else "再生")
                 }
                 OutlinedButton(
                     onClick = {
-                        val targetMs = (player.currentPosition + 10_000L).coerceAtMost(durationMs)
-                        player.seekTo(targetMs)
+                        val targetMs = ((controller?.currentPosition ?: 0L) + 10_000L).coerceAtMost(durationMs)
+                        controller?.seekTo(targetMs)
                         positionMs = targetMs
                         lastPersistedPositionMs = targetMs
                         onPositionChanged(targetMs)
                     },
                     modifier = Modifier.weight(1f),
-                    enabled = fileAvailable && durationMs > 0L,
+                    enabled = controller != null && fileAvailable && durationMs > 0L,
                 ) {
                     Text("+10秒")
                 }
@@ -1363,18 +1390,129 @@ private fun SavedMiniPlayer(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 OutlinedButton(
-                    onClick = onPrevious,
+                    onClick = { controller?.seekToPreviousMediaItem() },
                     modifier = Modifier.weight(1f),
-                    enabled = hasPrevious,
+                    enabled = controller?.hasPreviousMediaItem() == true,
                 ) {
                     Text("前へ")
                 }
                 OutlinedButton(
-                    onClick = onNext,
+                    onClick = { controller?.seekToNextMediaItem() },
                     modifier = Modifier.weight(1f),
-                    enabled = hasNext,
+                    enabled = controller?.hasNextMediaItem() == true,
                 ) {
                     Text("次へ")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun rememberPlaybackController(): MediaController? {
+    val context = LocalContext.current
+    var controller by remember { mutableStateOf<MediaController?>(null) }
+
+    DisposableEffect(context) {
+        val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
+        val future = MediaController.Builder(context, token).buildAsync()
+        future.addListener(
+            { controller = runCatching { future.get() }.getOrNull() },
+            ContextCompat.getMainExecutor(context),
+        )
+        onDispose {
+            controller = null
+            MediaController.releaseFuture(future)
+        }
+    }
+    return controller
+}
+
+@Composable
+private fun NowPlayingScreen(
+    title: String,
+    onBack: () -> Unit,
+) {
+    var visualizerMode by remember { mutableStateOf(VisualizerMode.EMBLEM) }
+    val transition = rememberInfiniteTransition(label = "wms-visualizer")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1_800, easing = LinearEasing)),
+        label = "visualizer-phase",
+    )
+    val renderState = LightweightVisualizerRenderer.render(
+        visualizerMode,
+        AudioAnalysisFrame(normalizedLevel = 0.72f, phase = phase),
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+    ) {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            TextButton(onClick = onBack) { Text("戻る") }
+        }
+        Text("Now Playing", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Box(
+            modifier = Modifier
+                .size(240.dp)
+                .background(
+                    Brush.radialGradient(
+                        listOf(Color(0xAA57D8FF), Color(0x553B55FF), Color.Transparent),
+                    ),
+                    RoundedCornerShape(48.dp),
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Canvas(Modifier.fillMaxSize()) {
+                drawCircle(
+                    color = Color(0xFF57D8FF).copy(alpha = renderState.emphasis),
+                    radius = size.minDimension * (0.32f + renderState.emphasis * 0.08f),
+                    style = Stroke(width = 5.dp.toPx()),
+                )
+                val step = size.width / (renderState.values.size + 1)
+                renderState.values.forEachIndexed { index, value ->
+                    val x = step * (index + 1)
+                    val halfHeight = size.height * value * 0.22f
+                    drawLine(
+                        color = Color(0xFF9B8CFF).copy(alpha = 0.35f + value * 0.6f),
+                        start = androidx.compose.ui.geometry.Offset(x, center.y - halfHeight),
+                        end = androidx.compose.ui.geometry.Offset(x, center.y + halfHeight),
+                        strokeWidth = 4.dp.toPx(),
+                    )
+                }
+            }
+            Image(
+                painter = painterResource(R.drawable.wms_emblem),
+                contentDescription = "WMS",
+                modifier = Modifier.size(150.dp),
+            )
+        }
+        Text(
+            title.ifBlank { "WMS Local Player" },
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            "端末内メディア · MediaSession",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text("Visualizer: ${visualizerMode.id}", fontWeight = FontWeight.Bold)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            VisualizerMode.entries.forEach { mode ->
+                OutlinedButton(onClick = { visualizerMode = mode }) {
+                    Text(if (mode == visualizerMode) "✓ ${mode.id}" else mode.id)
                 }
             }
         }

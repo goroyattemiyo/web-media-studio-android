@@ -40,14 +40,10 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Shapes
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
@@ -93,9 +89,6 @@ import com.goroyattemiyo.wms.playback.VisualizerMode
 import com.goroyattemiyo.wms.playback.toPlaybackMediaItem
 import com.goroyattemiyo.wms.appearance.AppearanceSettings
 import com.goroyattemiyo.wms.appearance.AppearanceViewModel
-import com.goroyattemiyo.wms.appearance.WmsSkin
-import com.goroyattemiyo.wms.appearance.WmsSkinCatalog
-import com.goroyattemiyo.wms.appearance.WmsSurfaceStyle
 import com.goroyattemiyo.wms.acquisition.AcquisitionPreset
 import com.goroyattemiyo.wms.search.SearchMediaItem
 import com.goroyattemiyo.wms.library.LibraryViewModel
@@ -103,6 +96,14 @@ import com.goroyattemiyo.wms.library.MediaEntity
 import com.goroyattemiyo.wms.playlist.PlaylistMediaItem
 import com.goroyattemiyo.wms.playlist.PlaylistSummary
 import com.goroyattemiyo.wms.playlist.PlaylistViewModel
+import com.goroyattemiyo.wms.ui.appearance.AppearanceScreen
+import com.goroyattemiyo.wms.ui.components.formatDuration
+import com.goroyattemiyo.wms.ui.components.formatFileSize
+import com.goroyattemiyo.wms.ui.components.formatPlaybackTime
+import com.goroyattemiyo.wms.ui.navigation.AppTab
+import com.goroyattemiyo.wms.ui.navigation.BottomNavigation
+import com.goroyattemiyo.wms.ui.playback.PlaybackRequest
+import com.goroyattemiyo.wms.ui.theme.WmsTheme
 import java.io.File
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
@@ -980,18 +981,6 @@ private fun acquisitionErrorTitle(code: String?): String = when (code) {
     else -> "保存できませんでした"
 }
 
-private enum class AppTab {
-    SEARCH,
-    LIBRARY,
-    PLAYLIST,
-}
-
-private data class PlaybackRequest(
-    val requestId: Int,
-    val mediaId: String,
-    val queue: List<MediaEntity>,
-)
-
 @Composable
 private fun LibraryScreen(
     media: List<MediaEntity>,
@@ -1758,223 +1747,6 @@ private fun NowPlayingScreen(
             }
         }
     }
-}
-
-@Composable
-private fun AppearanceScreen(
-    settings: AppearanceSettings,
-    onBack: () -> Unit,
-    onSkinSelected: (String) -> Unit,
-    onVisualizerSelected: (String) -> Unit,
-    onReducedMotionChanged: (Boolean) -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            TextButton(onClick = onBack) { Text("戻る") }
-            Text("Appearance", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.width(64.dp))
-        }
-
-        Text("Skin", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Text(
-            "Web/PWAと共通のIDを保ったネイティブテーマです。選択は端末に保存されます。",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        WmsSkinCatalog.skins.forEach { skin ->
-            SkinPreviewTile(
-                skin = skin,
-                selected = skin.id == settings.skinId,
-                onClick = { onSkinSelected(skin.id) },
-            )
-        }
-
-        Text("Player Visualizer", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            VisualizerMode.entries.forEach { mode ->
-                OutlinedButton(
-                    onClick = { onVisualizerSelected(mode.id) },
-                    enabled = !settings.reducedMotion,
-                ) {
-                    Text(if (mode.id == settings.visualizerId) "✓ ${mode.id}" else mode.id)
-                }
-            }
-        }
-
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("モーションを軽減", fontWeight = FontWeight.Bold)
-                    Text(
-                        "Now Playingを静的なminimal表示にします。",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-                Switch(checked = settings.reducedMotion, onCheckedChange = onReducedMotionChanged)
-            }
-        }
-        Spacer(Modifier.height(24.dp))
-    }
-}
-
-@Composable
-private fun SkinPreviewTile(
-    skin: WmsSkin,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(54.dp)
-                    .background(Color(skin.background), RoundedCornerShape(14.dp))
-                    .padding(7.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.linearGradient(listOf(Color(skin.primary), Color(skin.secondary))),
-                            RoundedCornerShape(10.dp),
-                        ),
-                )
-            }
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(
-                    if (selected) "✓ ${skin.displayName}" else skin.displayName,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    skin.description,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                Text(skin.id, style = MaterialTheme.typography.labelSmall)
-            }
-        }
-    }
-}
-
-@Composable
-private fun BottomNavigation(
-    selectedTab: AppTab,
-    onSelect: (AppTab) -> Unit,
-) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextButton(
-                onClick = { onSelect(AppTab.SEARCH) },
-                enabled = selectedTab != AppTab.SEARCH,
-            ) {
-                Text("検索")
-            }
-            TextButton(
-                onClick = { onSelect(AppTab.LIBRARY) },
-                enabled = selectedTab != AppTab.LIBRARY,
-            ) {
-                Text("Library")
-            }
-            TextButton(
-                onClick = { onSelect(AppTab.PLAYLIST) },
-                enabled = selectedTab != AppTab.PLAYLIST,
-            ) {
-                Text("Playlist")
-            }
-        }
-    }
-}
-
-private fun formatDuration(totalSeconds: Int): String {
-    val seconds = totalSeconds.coerceAtLeast(0)
-    val hours = seconds / 3600
-    val minutes = (seconds % 3600) / 60
-    val remainder = seconds % 60
-    return if (hours > 0) {
-        "%d:%02d:%02d".format(hours, minutes, remainder)
-    } else {
-        "%d:%02d".format(minutes, remainder)
-    }
-}
-
-private fun formatPlaybackTime(milliseconds: Long): String =
-    formatDuration((milliseconds.coerceAtLeast(0L) / 1_000L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
-
-private fun formatFileSize(bytes: Long): String = "%.1f MB".format(bytes.coerceAtLeast(0L) / 1_048_576.0)
-
-@Composable
-private fun WmsTheme(skin: WmsSkin, content: @Composable () -> Unit) {
-    val colors = if (skin.isLight) {
-        lightColorScheme(
-            primary = Color(skin.primary),
-            secondary = Color(skin.secondary),
-            background = Color(skin.background),
-            surface = Color(skin.surface),
-            surfaceVariant = Color(skin.surfaceVariant),
-            onBackground = Color(skin.onBackground),
-            onSurface = Color(skin.onBackground),
-            onSurfaceVariant = Color(skin.onSurfaceVariant),
-        )
-    } else {
-        darkColorScheme(
-            primary = Color(skin.primary),
-            onPrimary = Color(skin.background),
-            secondary = Color(skin.secondary),
-            background = Color(skin.background),
-            onBackground = Color(skin.onBackground),
-            surface = Color(skin.surface),
-            onSurface = Color(skin.onBackground),
-            surfaceVariant = Color(skin.surfaceVariant),
-            onSurfaceVariant = Color(skin.onSurfaceVariant),
-            error = Color(0xFFFFB4AB),
-        )
-    }
-    val corner = when (skin.surfaceStyle) {
-        WmsSurfaceStyle.CLEAN -> 10.dp
-        WmsSurfaceStyle.WARM -> 20.dp
-        WmsSurfaceStyle.RETRO -> 4.dp
-        WmsSurfaceStyle.NEON -> 16.dp
-    }
-    MaterialTheme(
-        colorScheme = colors,
-        shapes = Shapes(
-            small = RoundedCornerShape(corner / 2),
-            medium = RoundedCornerShape(corner),
-            large = RoundedCornerShape(corner * 1.5f),
-        ),
-        content = content,
-    )
 }
 
 private fun isDirectUrl(value: String): Boolean = URL_PATTERN.matches(value.trim())

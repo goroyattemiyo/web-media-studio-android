@@ -591,9 +591,29 @@ force-stop/restart restored the three-item queue, active item, and saved positio
 `docs/GATE_A5_DEVICE_CHECK.md` for the evidence. GitHub Actions and merge to `main`
 were not run.
 
-## Gates A6–A8
+## Gate A6 target — Production-quality UX and appearance parity
 
-Codex may continue beyond A5 according to `docs/ROADMAP.md`, but preserve the same rules:
+Current Gate A6 checkpoint on 2026-09-13 JST:
+
+```text
+branch: feat/gate-a6-production-ux
+verified implementation: 901aca8e3fec0fc37639819ad1f4ce6373a98b99
+status: LOCAL PASS
+```
+
+Search Home and Import have production-oriented presentation, controlled MP3/M4A/MP4
+presets, canonical URLs, and explicit failure states. Appearance provides all canonical
+skin and visualizer IDs with DataStore persistence, PCM playback analysis, and reduced
+motion. Local `testDebugUnitTest`, `lintDebug`, and `assembleDebug` pass.
+
+On Redmi 12 5G / Android 15, Appearance settings persisted across restart, M4A was
+acquired and played through the WMS MediaSession, and MP4 was acquired and played on
+the native video surface. See `docs/GATE_A6_DEVICE_CHECK.md`. GitHub Actions and merge
+to `main` were not run.
+
+## Gates A7–A8
+
+Codex may continue beyond A6 according to `docs/ROADMAP.md`, but preserve the same rules:
 
 - one Gate per branch,
 - local verification first,

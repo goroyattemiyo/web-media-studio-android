@@ -178,22 +178,24 @@ Exit: target Android device continues local playlist playback with screen locked
 
 ## Gate A6 — Production-quality UX + WMS appearance parity
 
-- [ ] production Search Home polish
-- [ ] real provider result cards with canonical URLs
-- [ ] simple `Audio / Video` choice in Import Sheet
-- [ ] MP3 192 default
-- [ ] M4A where stable
-- [ ] video acquisition where stable
-- [ ] expandable advanced options
-- [ ] clear unsupported/private/login-required states
-- [ ] WMS skin system with canonical Web/PWA theme IDs
-- [ ] Appearance screen with visual preview tiles
-- [ ] selected skin persisted in DataStore
-- [ ] selected visualizer persisted in DataStore
-- [ ] audio-reactive visualizers ported where technically stable
-- [ ] reduced-motion / `minimal` option
+- [x] production Search Home polish
+- [x] real provider result cards with canonical URLs
+- [x] simple `Audio / Video` choice in Import Sheet
+- [x] MP3 192 default
+- [x] M4A where stable
+- [x] video acquisition where stable
+- [x] expandable advanced options
+- [x] clear unsupported/private/login-required states
+- [x] WMS skin system with canonical Web/PWA theme IDs
+- [x] Appearance screen with visual preview tiles
+- [x] selected skin persisted in DataStore
+- [x] selected visualizer persisted in DataStore
+- [x] audio-reactive visualizers ported where technically stable
+- [x] reduced-motion / `minimal` option
 
 Exit: normal use looks and feels like native WMS rather than a developer diagnostic app, while preserving the Web/PWA visual identity.
+
+**Gate A6: LOCAL PASS — verified locally and on the target Android device on 2026-09-13 JST.**
 
 ## Gate A7 — Provider matrix
 
@@ -240,4 +242,4 @@ Visualizer modes:
 
 ## Current priority
 
-**Gate A6 — Production-quality UX + WMS appearance parity.** Continue locally from the verified Gate A5 checkpoint. Do not run GitHub Actions or merge to `main`.
+**Gate A7 — Provider matrix.** Continue locally from the verified Gate A6 checkpoint, testing and documenting one provider at a time. Do not run GitHub Actions or merge to `main`.

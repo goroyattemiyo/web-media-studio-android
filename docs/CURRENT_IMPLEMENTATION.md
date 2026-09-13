@@ -8,9 +8,9 @@ Repository: `goroyattemiyo/web-media-studio-android`
 
 Current active branch:
 
-`feat/gate-a5-background-playback`
+`feat/gate-a6-production-ux`
 
-Gate A5 is LOCAL PASS on its feature branch. No GitHub Actions run or merge to `main` was performed.
+Gate A6 is LOCAL PASS on its feature branch. No GitHub Actions run or merge to `main` was performed.
 
 Merged baseline on `main`:
 
@@ -242,12 +242,31 @@ Implemented and verified:
 
 See `docs/GATE_A5_DEVICE_CHECK.md` for the device evidence.
 
+## Gate A6 — LOCAL PASS
+
+Verified on 2026-09-13 JST at `901aca8e3fec0fc37639819ad1f4ce6373a98b99`.
+
+Implemented and verified:
+
+- app versionCode `10`, versionName `0.6.0-a6-production-ux`
+- polished Search Home with canonical URLs on result cards and a compact Mini Player
+- Import Sheet with `Audio / Video`, MP3 192 kbps default, controlled M4A 192 kbps and MP4 presets, and expandable details
+- explicit unsupported, private/login-required, unavailable, format, and storage failure states
+- all 14 canonical WMS skin IDs with native palette/shape styling and Appearance preview tiles
+- all 12 canonical visualizer IDs, persisted skin/visualizer/reduced-motion preferences in Preferences DataStore
+- PCM-derived playback level, waveform, and spectrum-bucket analysis without microphone permission
+- reduced motion forces the static `minimal` renderer
+- native Media3 video surface on Now Playing for video Library items
+- local `testDebugUnitTest`, `lintDebug`, and `assembleDebug` passed
+- APK SHA-256: `9CD0E8BD47C6AE7E87A1316AD8BC4AA5BDF7080E6D1E33A76A825BCEF7A8DD52`
+- Redmi 12 5G / Android 15 verified Appearance persistence, M4A acquisition/playback, and MP4 acquisition/video playback
+
+See `docs/GATE_A6_DEVICE_CHECK.md` for the device evidence.
+
 ## Deferred to later gates
 
-Gate A6+:
+Gate A7+:
 
-- production skin system and appearance settings
-- audio-reactive production visualizers using the Gate A5 analysis boundary
 - broader provider matrix
 
 ## Product/security boundaries
@@ -263,4 +282,4 @@ Gate A6+:
 
 ## Next engineering step
 
-Create `feat/gate-a6-production-ux` from the verified Gate A5 head and implement Gate A6 locally. Do not run GitHub Actions or merge to `main`.
+Create a Gate A7 provider-matrix branch from the verified Gate A6 head and test providers one at a time. Do not run GitHub Actions or merge to `main`.

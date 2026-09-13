@@ -31,17 +31,23 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
@@ -67,6 +73,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -76,12 +83,20 @@ import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import androidx.media3.ui.PlayerView
 import androidx.core.content.ContextCompat
 import com.goroyattemiyo.wms.playback.PlaybackService
 import com.goroyattemiyo.wms.playback.AudioAnalysisFrame
 import com.goroyattemiyo.wms.playback.LightweightVisualizerRenderer
+import com.goroyattemiyo.wms.playback.PcmAudioAnalysisBus
 import com.goroyattemiyo.wms.playback.VisualizerMode
 import com.goroyattemiyo.wms.playback.toPlaybackMediaItem
+import com.goroyattemiyo.wms.appearance.AppearanceSettings
+import com.goroyattemiyo.wms.appearance.AppearanceViewModel
+import com.goroyattemiyo.wms.appearance.WmsSkin
+import com.goroyattemiyo.wms.appearance.WmsSkinCatalog
+import com.goroyattemiyo.wms.appearance.WmsSurfaceStyle
+import com.goroyattemiyo.wms.acquisition.AcquisitionPreset
 import com.goroyattemiyo.wms.search.SearchMediaItem
 import com.goroyattemiyo.wms.library.LibraryViewModel
 import com.goroyattemiyo.wms.library.MediaEntity
@@ -99,13 +114,24 @@ class MainActivity : ComponentActivity() {
     private val libraryViewModel by viewModels<LibraryViewModel>()
     private val playlistViewModel by viewModels<PlaylistViewModel>()
     private val searchViewModel by viewModels<SearchViewModel>()
+    private val appearanceViewModel by viewModels<AppearanceViewModel>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         consumeShareIntent(intent)
         setContent {
-            WmsTheme {
-                WmsRoot(acquisitionViewModel, searchViewModel, libraryViewModel, playlistViewModel)
+            val appearance by appearanceViewModel.settings.collectAsStateWithLifecycle(
+                initialValue = AppearanceSettings(),
+            )
+            WmsTheme(appearance.skin) {
+                WmsRoot(
+                    acquisitionViewModel,
+                    searchViewModel,
+                    libraryViewModel,
+                    playlistViewModel,
+                    appearance,
+                    appearanceViewModel,
+                )
             }
         }
     }
@@ -129,6 +155,8 @@ private fun WmsRoot(
     searchViewModel: SearchViewModel,
     libraryViewModel: LibraryViewModel,
     playlistViewModel: PlaylistViewModel,
+    appearance: AppearanceSettings,
+    appearanceViewModel: AppearanceViewModel,
 ) {
     val acquisitionState by acquisitionViewModel.uiState.collectAsStateWithLifecycle()
     val searchState by searchViewModel.uiState.collectAsStateWithLifecycle()
@@ -146,6 +174,7 @@ private fun WmsRoot(
     var playbackRequest by remember { mutableStateOf<PlaybackRequest?>(null) }
     var selectedTab by remember { mutableStateOf(AppTab.SEARCH) }
     var nowPlayingOpen by remember { mutableStateOf(false) }
+    var appearanceOpen by remember { mutableStateOf(false) }
     var importPlaylistId by remember { mutableStateOf<String?>(null) }
     var initializedImportUrl by remember { mutableStateOf<String?>(null) }
 
@@ -191,10 +220,27 @@ private fun WmsRoot(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.weight(1f)) {
-                if (nowPlayingOpen) {
+                if (appearanceOpen) {
+                    AppearanceScreen(
+                        settings = appearance,
+                        onBack = { appearanceOpen = false },
+                        onSkinSelected = appearanceViewModel::selectSkin,
+                        onVisualizerSelected = appearanceViewModel::selectVisualizer,
+                        onReducedMotionChanged = appearanceViewModel::setReducedMotion,
+                    )
+                } else if (nowPlayingOpen) {
                     NowPlayingScreen(
                         title = selectedMedia?.title.orEmpty(),
                         onBack = { nowPlayingOpen = false },
+                        visualizerMode = if (appearance.reducedMotion) {
+                            VisualizerMode.MINIMAL
+                        } else {
+                            appearance.visualizer
+                        },
+                        reducedMotion = appearance.reducedMotion,
+                        onVisualizerSelected = appearanceViewModel::selectVisualizer,
+                        controller = playbackController,
+                        isVideo = selectedMedia?.mediaType == "VIDEO",
                     )
                 } else when (selectedTab) {
                     AppTab.SEARCH -> SearchHome(
@@ -221,7 +267,14 @@ private fun WmsRoot(
                             importOpen = true
                         },
                         onOpenDeveloper = { developerOpen = !developerOpen },
+                        onOpenAppearance = { appearanceOpen = true },
                         developerOpen = developerOpen,
+                        recentMedia = libraryMedia.take(3),
+                        onPlayRecent = { media ->
+                            playlistViewModel.selectPlaylist(null)
+                            libraryViewModel.select(media)
+                            requestPlayback(media, listOf(media))
+                        },
                     )
                     AppTab.LIBRARY -> LibraryScreen(
                         media = libraryMedia,
@@ -258,27 +311,30 @@ private fun WmsRoot(
                 }
             }
 
-            selectedMedia?.let { media ->
-                SavedMiniPlayer(
-                    controller = playbackController,
-                    media = media,
-                    playbackRequest = playbackRequest,
-                    onPositionChanged = { positionMs ->
-                        libraryViewModel.savePosition(media.id, positionMs)
+            if (!appearanceOpen) {
+                selectedMedia?.let { media ->
+                    SavedMiniPlayer(
+                        controller = playbackController,
+                        media = media,
+                        playbackRequest = playbackRequest,
+                        onPositionChanged = { positionMs ->
+                            libraryViewModel.savePosition(media.id, positionMs)
+                        },
+                        onMediaTransition = { mediaId ->
+                            libraryMedia.firstOrNull { it.id == mediaId }?.let(libraryViewModel::select)
+                        },
+                        onOpenNowPlaying = { nowPlayingOpen = true },
+                        expanded = nowPlayingOpen,
+                    )
+                }
+                BottomNavigation(
+                    selectedTab = selectedTab,
+                    onSelect = {
+                        nowPlayingOpen = false
+                        selectedTab = it
                     },
-                    onMediaTransition = { mediaId ->
-                        libraryMedia.firstOrNull { it.id == mediaId }?.let(libraryViewModel::select)
-                    },
-                    onOpenNowPlaying = { nowPlayingOpen = true },
                 )
             }
-            BottomNavigation(
-                selectedTab = selectedTab,
-                onSelect = {
-                    nowPlayingOpen = false
-                    selectedTab = it
-                },
-            )
         }
     }
 
@@ -290,7 +346,7 @@ private fun WmsRoot(
             onDismiss = { importOpen = false },
             onPlaylistSelected = { importPlaylistId = it },
             onRightsChanged = acquisitionViewModel::setRightsConfirmed,
-            onSave = { acquisitionViewModel.acquireMp3(importPlaylistId) },
+            onSave = { preset -> acquisitionViewModel.acquire(preset, importPlaylistId) },
             onCancel = acquisitionViewModel::cancelAcquisition,
             onUpdateYoutubeDl = acquisitionViewModel::updateYoutubeDl,
             onDiagnostics = acquisitionViewModel::runDiagnostics,
@@ -316,9 +372,13 @@ private fun SearchHome(
     onSubmit: () -> Unit,
     onImportResult: (SearchMediaItem) -> Unit,
     onOpenDeveloper: () -> Unit,
+    onOpenAppearance: () -> Unit,
     developerOpen: Boolean,
+    recentMedia: List<MediaEntity>,
+    onPlayRecent: (MediaEntity) -> Unit,
 ) {
     val context = LocalContext.current
+    var menuOpen by remember { mutableStateOf(false) }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -364,7 +424,25 @@ private fun SearchHome(
                         )
                     }
                 }
-                TextButton(onClick = onOpenDeveloper) { Text("⋮") }
+                Box {
+                    TextButton(onClick = { menuOpen = true }) { Text("⋮") }
+                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        DropdownMenuItem(
+                            text = { Text("Appearance") },
+                            onClick = {
+                                menuOpen = false
+                                onOpenAppearance()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Developer Tools") },
+                            onClick = {
+                                menuOpen = false
+                                onOpenDeveloper()
+                            },
+                        )
+                    }
+                }
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -408,10 +486,7 @@ private fun SearchHome(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Button(onClick = { }) { Text("YouTube") }
-                OutlinedButton(onClick = { }, enabled = false) { Text("TikTok · 今後") }
-                OutlinedButton(onClick = { }, enabled = false) { Text("Instagram · 今後") }
-                OutlinedButton(onClick = { }, enabled = false) { Text("Web · 今後") }
+                Button(onClick = { }) { Text("YouTube · 端末内検索") }
             }
 
             searchState.errorMessage?.let { message ->
@@ -447,6 +522,34 @@ private fun SearchHome(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
                 )
+            }
+
+            if (recentMedia.isNotEmpty() && searchState.results.isEmpty()) {
+                Text("最近追加", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                recentMedia.forEach { media ->
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Image(
+                                painter = painterResource(R.drawable.wms_emblem),
+                                contentDescription = null,
+                                modifier = Modifier.size(46.dp),
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(media.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    "${media.provider} · ${media.mediaType.lowercase()}",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                            TextButton(onClick = { onPlayRecent(media) }) { Text("再生") }
+                        }
+                    }
+                }
             }
 
             if (developerOpen) {
@@ -501,6 +604,13 @@ private fun SearchResultCard(
                             )
                         }
                     }
+                    Text(
+                        item.url,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -597,13 +707,15 @@ private fun ImportSheet(
     onDismiss: () -> Unit,
     onPlaylistSelected: (String?) -> Unit,
     onRightsChanged: (Boolean) -> Unit,
-    onSave: () -> Unit,
+    onSave: (AcquisitionPreset) -> Unit,
     onCancel: () -> Unit,
     onUpdateYoutubeDl: () -> Unit,
     onDiagnostics: () -> Unit,
     onCloseAndPlay: () -> Unit,
 ) {
     var showDeveloper by remember { mutableStateOf(false) }
+    var showAdvanced by remember(state.url) { mutableStateOf(false) }
+    var selectedPreset by remember(state.url) { mutableStateOf(AcquisitionPreset.MP3_192) }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -637,8 +749,57 @@ private fun ImportSheet(
                         state.detectedProvider?.let {
                             Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
+                        Text(selectedPreset.displayName, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+
+            Text("保存形式", fontWeight = FontWeight.Bold)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FormatChoice(
+                    label = "Audio",
+                    detail = if (selectedPreset == AcquisitionPreset.M4A_192) "M4A" else "MP3 192",
+                    selected = selectedPreset.mediaType == "AUDIO",
+                    enabled = !state.acquiring,
+                    modifier = Modifier.weight(1f),
+                    onClick = { selectedPreset = AcquisitionPreset.MP3_192 },
+                )
+                FormatChoice(
+                    label = "Video",
+                    detail = "MP4",
+                    selected = selectedPreset == AcquisitionPreset.VIDEO_MP4,
+                    enabled = !state.acquiring,
+                    modifier = Modifier.weight(1f),
+                    onClick = { selectedPreset = AcquisitionPreset.VIDEO_MP4 },
+                )
+            }
+            TextButton(onClick = { showAdvanced = !showAdvanced }, enabled = !state.acquiring) {
+                Text(if (showAdvanced) "詳細オプションを閉じる" else "詳細オプション")
+            }
+            if (showAdvanced) {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text("Audio container", fontWeight = FontWeight.Bold)
+                        AcquisitionPreset.entries
+                            .filter { it.mediaType == "AUDIO" }
+                            .forEach { preset ->
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    RadioButton(
+                                        selected = selectedPreset == preset,
+                                        onClick = { selectedPreset = preset },
+                                        enabled = !state.acquiring,
+                                    )
+                                    Text(preset.displayName)
+                                }
+                            }
                         Text(
-                            "Audio · MP3 192 kbps",
+                            "形式はWMS管理の固定プリセットです。配信元に形式がない場合は明確に失敗します。",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodySmall,
                         )
@@ -691,7 +852,7 @@ private fun ImportSheet(
             }
 
             Button(
-                onClick = onSave,
+                onClick = { onSave(selectedPreset) },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = state.engineReady &&
                     state.detectedTitle != null &&
@@ -701,7 +862,7 @@ private fun ImportSheet(
                     !state.probing &&
                     !state.acquiring,
             ) {
-                Text(if (state.acquiring) "保存中…" else "保存 / MP3 192 kbps")
+                Text(if (state.acquiring) "保存中…" else "保存 / ${selectedPreset.displayName}")
             }
 
             if (state.acquiring) {
@@ -720,12 +881,13 @@ private fun ImportSheet(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(5.dp),
                     ) {
-                        Text(
-                            "ERROR ${state.errorCode ?: "UNKNOWN"}",
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.error,
-                        )
+                        Text(acquisitionErrorTitle(state.errorCode), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
                         Text(message)
+                        Text(
+                            "コード: ${state.errorCode ?: "UNKNOWN"}",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.labelSmall,
+                        )
                     }
                 }
             }
@@ -737,7 +899,7 @@ private fun ImportSheet(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         Text("保存完了", fontWeight = FontWeight.Bold)
-                        Text(state.savedTitle ?: "保存済み音声")
+                        Text(state.savedTitle ?: "保存済みメディア")
                         Button(onClick = onCloseAndPlay, modifier = Modifier.fillMaxWidth()) {
                             Text("閉じて再生")
                         }
@@ -789,6 +951,33 @@ private fun ImportSheet(
             Spacer(Modifier.height(20.dp))
         }
     }
+}
+
+@Composable
+private fun FormatChoice(
+    label: String,
+    detail: String,
+    selected: Boolean,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    OutlinedButton(onClick = onClick, enabled = enabled, modifier = modifier) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(if (selected) "✓ $label" else label, fontWeight = FontWeight.Bold)
+            Text(detail, style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+private fun acquisitionErrorTitle(code: String?): String = when (code) {
+    "LOGIN_REQUIRED" -> "ログインが必要なため保存できません"
+    "DRM_OR_PROTECTED" -> "保護されたメディアは保存できません"
+    "UNSUPPORTED_SOURCE" -> "この配信元にはまだ対応していません"
+    "UNAVAILABLE" -> "非公開または利用できないメディアです"
+    "FORMAT_UNAVAILABLE" -> "選択した保存形式を利用できません"
+    "STORAGE_FULL" -> "端末の空き容量が不足しています"
+    else -> "保存できませんでした"
 }
 
 private enum class AppTab {
@@ -887,7 +1076,7 @@ private fun LibraryScreen(
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(onClick = { onPlay(item) }, enabled = available) { Text("再生") }
                             OutlinedButton(onClick = { pendingDelete = item }) { Text("削除") }
                         }
@@ -1162,6 +1351,7 @@ private fun SavedMiniPlayer(
     onPositionChanged: (Long) -> Unit,
     onMediaTransition: (String) -> Unit,
     onOpenNowPlaying: () -> Unit,
+    expanded: Boolean,
 ) {
     val fileAvailable = remember(media.localPath) {
         File(media.localPath).let { it.exists() && it.length() > 0L }
@@ -1304,9 +1494,22 @@ private fun SavedMiniPlayer(
                     )
                     TextButton(onClick = onOpenNowPlaying) { Text("Now Playing") }
                 }
+                if (!expanded) {
+                    TextButton(
+                        onClick = {
+                            if (controller?.isPlaying == true) controller.pause() else controller?.play()
+                        },
+                        enabled = controller != null && fileAvailable,
+                    ) { Text(if (isPlaying) "停止" else "再生") }
+                    TextButton(
+                        onClick = { controller?.seekToNextMediaItem() },
+                        enabled = controller?.hasNextMediaItem() == true,
+                    ) { Text("次") }
+                }
             }
 
-            Slider(
+            if (expanded) {
+                Slider(
                 value = displayedFraction,
                 onValueChange = {
                     isSeeking = true
@@ -1323,7 +1526,7 @@ private fun SavedMiniPlayer(
                 modifier = Modifier.fillMaxWidth(),
                 enabled = controller != null && fileAvailable && durationMs > 0L,
             )
-            Row(
+                Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
@@ -1338,7 +1541,7 @@ private fun SavedMiniPlayer(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Row(
+                Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -1385,7 +1588,7 @@ private fun SavedMiniPlayer(
                     Text("+10秒")
                 }
             }
-            Row(
+                Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -1403,6 +1606,7 @@ private fun SavedMiniPlayer(
                 ) {
                     Text("次へ")
                 }
+            }
             }
         }
     }
@@ -1432,19 +1636,33 @@ private fun rememberPlaybackController(): MediaController? {
 private fun NowPlayingScreen(
     title: String,
     onBack: () -> Unit,
+    visualizerMode: VisualizerMode,
+    reducedMotion: Boolean,
+    onVisualizerSelected: (String) -> Unit,
+    controller: MediaController?,
+    isVideo: Boolean,
 ) {
-    var visualizerMode by remember { mutableStateOf(VisualizerMode.EMBLEM) }
-    val transition = rememberInfiniteTransition(label = "wms-visualizer")
-    val phase by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(1_800, easing = LinearEasing)),
-        label = "visualizer-phase",
+    val analysisFrame by PcmAudioAnalysisBus.frames.collectAsStateWithLifecycle(
+        initialValue = AudioAnalysisFrame(),
     )
+    val phase = if (reducedMotion) {
+        0f
+    } else {
+        val transition = rememberInfiniteTransition(label = "wms-visualizer")
+        val animatedPhase by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(1_800, easing = LinearEasing)),
+            label = "visualizer-phase",
+        )
+        animatedPhase
+    }
     val renderState = LightweightVisualizerRenderer.render(
         visualizerMode,
-        AudioAnalysisFrame(normalizedLevel = 0.72f, phase = phase),
+        analysisFrame.copy(phase = phase),
     )
+    val visualPrimary = MaterialTheme.colorScheme.primary
+    val visualSecondary = MaterialTheme.colorScheme.secondary
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1468,29 +1686,42 @@ private fun NowPlayingScreen(
                 ),
             contentAlignment = Alignment.Center,
         ) {
-            Canvas(Modifier.fillMaxSize()) {
-                drawCircle(
-                    color = Color(0xFF57D8FF).copy(alpha = renderState.emphasis),
-                    radius = size.minDimension * (0.32f + renderState.emphasis * 0.08f),
-                    style = Stroke(width = 5.dp.toPx()),
+            if (isVideo && controller != null) {
+                AndroidView(
+                    factory = { context ->
+                        PlayerView(context).apply {
+                            useController = false
+                            player = controller
+                        }
+                    },
+                    update = { it.player = controller },
+                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(36.dp)),
                 )
-                val step = size.width / (renderState.values.size + 1)
-                renderState.values.forEachIndexed { index, value ->
-                    val x = step * (index + 1)
-                    val halfHeight = size.height * value * 0.22f
-                    drawLine(
-                        color = Color(0xFF9B8CFF).copy(alpha = 0.35f + value * 0.6f),
-                        start = androidx.compose.ui.geometry.Offset(x, center.y - halfHeight),
-                        end = androidx.compose.ui.geometry.Offset(x, center.y + halfHeight),
-                        strokeWidth = 4.dp.toPx(),
+            } else {
+                Canvas(Modifier.fillMaxSize()) {
+                    drawCircle(
+                        color = visualPrimary.copy(alpha = renderState.emphasis),
+                        radius = size.minDimension * (0.32f + renderState.emphasis * 0.08f),
+                        style = Stroke(width = 5.dp.toPx()),
                     )
+                    val step = size.width / (renderState.values.size + 1)
+                    renderState.values.forEachIndexed { index, value ->
+                        val x = step * (index + 1)
+                        val halfHeight = size.height * value * 0.22f
+                        drawLine(
+                            color = visualSecondary.copy(alpha = 0.35f + value * 0.6f),
+                            start = androidx.compose.ui.geometry.Offset(x, center.y - halfHeight),
+                            end = androidx.compose.ui.geometry.Offset(x, center.y + halfHeight),
+                            strokeWidth = 4.dp.toPx(),
+                        )
+                    }
                 }
+                Image(
+                    painter = painterResource(R.drawable.wms_emblem),
+                    contentDescription = "WMS",
+                    modifier = Modifier.size(150.dp),
+                )
             }
-            Image(
-                painter = painterResource(R.drawable.wms_emblem),
-                contentDescription = "WMS",
-                modifier = Modifier.size(150.dp),
-            )
         }
         Text(
             title.ifBlank { "WMS Local Player" },
@@ -1503,7 +1734,71 @@ private fun NowPlayingScreen(
             "端末内メディア · MediaSession",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Text("Visualizer: ${visualizerMode.id}", fontWeight = FontWeight.Bold)
+        Text(if (isVideo) "Video · MP4" else "Visualizer: ${visualizerMode.id}", fontWeight = FontWeight.Bold)
+        if (reducedMotion) {
+            Text(
+                "モーション軽減中 · minimal を使用",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        if (!isVideo) Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            VisualizerMode.entries.forEach { mode ->
+                OutlinedButton(
+                    onClick = { onVisualizerSelected(mode.id) },
+                    enabled = !reducedMotion,
+                ) {
+                    Text(if (mode == visualizerMode) "✓ ${mode.id}" else mode.id)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppearanceScreen(
+    settings: AppearanceSettings,
+    onBack: () -> Unit,
+    onSkinSelected: (String) -> Unit,
+    onVisualizerSelected: (String) -> Unit,
+    onReducedMotionChanged: (Boolean) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            TextButton(onClick = onBack) { Text("戻る") }
+            Text("Appearance", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.width(64.dp))
+        }
+
+        Text("Skin", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text(
+            "Web/PWAと共通のIDを保ったネイティブテーマです。選択は端末に保存されます。",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        WmsSkinCatalog.skins.forEach { skin ->
+            SkinPreviewTile(
+                skin = skin,
+                selected = skin.id == settings.skinId,
+                onClick = { onSkinSelected(skin.id) },
+            )
+        }
+
+        Text("Player Visualizer", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1511,9 +1806,76 @@ private fun NowPlayingScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             VisualizerMode.entries.forEach { mode ->
-                OutlinedButton(onClick = { visualizerMode = mode }) {
-                    Text(if (mode == visualizerMode) "✓ ${mode.id}" else mode.id)
+                OutlinedButton(
+                    onClick = { onVisualizerSelected(mode.id) },
+                    enabled = !settings.reducedMotion,
+                ) {
+                    Text(if (mode.id == settings.visualizerId) "✓ ${mode.id}" else mode.id)
                 }
+            }
+        }
+
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("モーションを軽減", fontWeight = FontWeight.Bold)
+                    Text(
+                        "Now Playingを静的なminimal表示にします。",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Switch(checked = settings.reducedMotion, onCheckedChange = onReducedMotionChanged)
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun SkinPreviewTile(
+    skin: WmsSkin,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(54.dp)
+                    .background(Color(skin.background), RoundedCornerShape(14.dp))
+                    .padding(7.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.linearGradient(listOf(Color(skin.primary), Color(skin.secondary))),
+                            RoundedCornerShape(10.dp),
+                        ),
+                )
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(
+                    if (selected) "✓ ${skin.displayName}" else skin.displayName,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    skin.description,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Text(skin.id, style = MaterialTheme.typography.labelSmall)
             }
         }
     }
@@ -1571,22 +1933,48 @@ private fun formatPlaybackTime(milliseconds: Long): String =
 
 private fun formatFileSize(bytes: Long): String = "%.1f MB".format(bytes.coerceAtLeast(0L) / 1_048_576.0)
 
-private val WmsDarkColors = darkColorScheme(
-    primary = Color(0xFF57D8FF),
-    onPrimary = Color(0xFF041019),
-    background = Color(0xFF05070D),
-    onBackground = Color(0xFFF4F7FF),
-    surface = Color(0xFF111620),
-    onSurface = Color(0xFFF4F7FF),
-    surfaceVariant = Color(0xFF1A2230),
-    onSurfaceVariant = Color(0xFFAEBBCB),
-    secondary = Color(0xFF9B6BFF),
-    error = Color(0xFFFFB4AB),
-)
-
 @Composable
-private fun WmsTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = WmsDarkColors, content = content)
+private fun WmsTheme(skin: WmsSkin, content: @Composable () -> Unit) {
+    val colors = if (skin.isLight) {
+        lightColorScheme(
+            primary = Color(skin.primary),
+            secondary = Color(skin.secondary),
+            background = Color(skin.background),
+            surface = Color(skin.surface),
+            surfaceVariant = Color(skin.surfaceVariant),
+            onBackground = Color(skin.onBackground),
+            onSurface = Color(skin.onBackground),
+            onSurfaceVariant = Color(skin.onSurfaceVariant),
+        )
+    } else {
+        darkColorScheme(
+            primary = Color(skin.primary),
+            onPrimary = Color(skin.background),
+            secondary = Color(skin.secondary),
+            background = Color(skin.background),
+            onBackground = Color(skin.onBackground),
+            surface = Color(skin.surface),
+            onSurface = Color(skin.onBackground),
+            surfaceVariant = Color(skin.surfaceVariant),
+            onSurfaceVariant = Color(skin.onSurfaceVariant),
+            error = Color(0xFFFFB4AB),
+        )
+    }
+    val corner = when (skin.surfaceStyle) {
+        WmsSurfaceStyle.CLEAN -> 10.dp
+        WmsSurfaceStyle.WARM -> 20.dp
+        WmsSurfaceStyle.RETRO -> 4.dp
+        WmsSurfaceStyle.NEON -> 16.dp
+    }
+    MaterialTheme(
+        colorScheme = colors,
+        shapes = Shapes(
+            small = RoundedCornerShape(corner / 2),
+            medium = RoundedCornerShape(corner),
+            large = RoundedCornerShape(corner * 1.5f),
+        ),
+        content = content,
+    )
 }
 
 private fun isDirectUrl(value: String): Boolean = URL_PATTERN.matches(value.trim())

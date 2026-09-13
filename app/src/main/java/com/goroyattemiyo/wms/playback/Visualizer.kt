@@ -6,6 +6,12 @@ import kotlin.math.abs
 import kotlin.math.sin
 
 enum class VisualizerMode(val id: String) {
+    RAINBOW_RING("rainbow-ring"),
+    OSCILLOSCOPE("oscilloscope"),
+    SPECTRUM_CITY("spectrum-city"),
+    NEON_TUNNEL("neon-tunnel"),
+    KALEIDO("kaleido"),
+    PARTICLES("particles"),
     EMBLEM("emblem"),
     PULSE("pulse"),
     ORBIT("orbit"),
@@ -15,11 +21,13 @@ enum class VisualizerMode(val id: String) {
 }
 
 data class AudioAnalysisFrame(
-    val normalizedLevel: Float,
-    val phase: Float,
+    val normalizedLevel: Float = 0f,
+    val phase: Float = 0f,
+    val waveform: List<Float> = emptyList(),
+    val spectrum: List<Float> = emptyList(),
 )
 
-/** Boundary for a future player/audio-effect backed analyzer. */
+/** Boundary between the service-owned PCM analyzer and native visual renderers. */
 interface AudioAnalysisDataSource {
     val frames: Flow<AudioAnalysisFrame>
 }
@@ -38,6 +46,12 @@ object LightweightVisualizerRenderer : VisualizerRenderer {
         val level = frame.normalizedLevel.coerceIn(0f, 1f)
         val phase = frame.phase.coerceIn(0f, 1f)
         val count = when (mode) {
+            VisualizerMode.RAINBOW_RING -> 24
+            VisualizerMode.OSCILLOSCOPE -> 32
+            VisualizerMode.SPECTRUM_CITY -> 20
+            VisualizerMode.NEON_TUNNEL -> 18
+            VisualizerMode.KALEIDO -> 16
+            VisualizerMode.PARTICLES -> 24
             VisualizerMode.BARS -> 12
             VisualizerMode.WAVE -> 20
             VisualizerMode.ORBIT -> 8
@@ -45,9 +59,22 @@ object LightweightVisualizerRenderer : VisualizerRenderer {
         }
         val values = List(count) { index ->
             val angle = phase * 2f * PI.toFloat() + index * PI.toFloat() / count
-            (0.2f + abs(sin(angle)) * 0.8f * level).coerceIn(0f, 1f)
+            val source = when (mode) {
+                VisualizerMode.OSCILLOSCOPE, VisualizerMode.WAVE -> frame.waveform
+                VisualizerMode.SPECTRUM_CITY, VisualizerMode.BARS -> frame.spectrum
+                else -> emptyList()
+            }
+            val sampleIndex = index * source.size.coerceAtLeast(1) / count
+            source.getOrNull(sampleIndex)
+                ?: (0.2f + abs(sin(angle)) * 0.8f * level).coerceIn(0f, 1f)
         }
         val emphasis = when (mode) {
+            VisualizerMode.RAINBOW_RING -> 0.55f + level * 0.4f
+            VisualizerMode.OSCILLOSCOPE -> 0.45f + level * 0.4f
+            VisualizerMode.SPECTRUM_CITY -> 0.5f + level * 0.45f
+            VisualizerMode.NEON_TUNNEL -> 0.5f + level * 0.35f
+            VisualizerMode.KALEIDO -> 0.55f + level * 0.35f
+            VisualizerMode.PARTICLES -> 0.45f + level * 0.5f
             VisualizerMode.MINIMAL -> 0.15f
             VisualizerMode.EMBLEM -> 0.55f
             VisualizerMode.PULSE -> 0.65f + 0.25f * sin(phase * 2f * PI.toFloat())

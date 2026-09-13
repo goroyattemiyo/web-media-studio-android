@@ -45,13 +45,18 @@ class ManagedAcquisitionService : Service() {
             ACTION_START -> startManagedJob(
                 intent.getStringExtra(EXTRA_SOURCE_URL).orEmpty(),
                 intent.getStringExtra(EXTRA_PLAYLIST_ID),
+                AcquisitionPreset.fromId(intent.getStringExtra(EXTRA_PRESET_ID)),
             )
             else -> stopSelf(startId)
         }
         return START_NOT_STICKY
     }
 
-    private fun startManagedJob(sourceUrl: String, playlistId: String?) {
+    private fun startManagedJob(
+        sourceUrl: String,
+        playlistId: String?,
+        preset: AcquisitionPreset,
+    ) {
         val source = sourceUrl.trim()
         if (source.isBlank()) {
             stopSelf()
@@ -98,7 +103,7 @@ class ManagedAcquisitionService : Service() {
                     // Engine initialization happens before taking it so the suspend
                     // acquisition can safely run while updater/search are excluded.
                     runBlocking {
-                        engine.acquireMp3(source) { progress ->
+                        engine.acquire(source, preset) { progress ->
                             if (!cancelRequested) {
                                 ManagedAcquisitionBus.progress(progress.percent, progress.message)
                                 notificationManager.notify(
@@ -269,6 +274,7 @@ class ManagedAcquisitionService : Service() {
         const val ACTION_CANCEL = "com.goroyattemiyo.wms.action.CANCEL_ACQUISITION"
         const val EXTRA_SOURCE_URL = "source_url"
         const val EXTRA_PLAYLIST_ID = "playlist_id"
+        const val EXTRA_PRESET_ID = "preset_id"
 
         private const val CHANNEL_ID = "wms_acquisition"
         private const val NOTIFICATION_ID = 2101

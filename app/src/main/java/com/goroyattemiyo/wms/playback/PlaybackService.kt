@@ -8,6 +8,7 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
@@ -52,9 +53,10 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
+    @UnstableApi
     override fun onCreate() {
         super.onCreate()
-        player = ExoPlayer.Builder(this).build().apply {
+        player = ExoPlayer.Builder(this, AnalysisRenderersFactory(this)).build().apply {
             setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)

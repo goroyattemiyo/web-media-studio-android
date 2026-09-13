@@ -103,8 +103,9 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
         cancelRequested.set(false)
     }
 
-    override suspend fun acquireMp3(
+    override suspend fun acquire(
         sourceUrl: String,
+        preset: AcquisitionPreset,
         onProgress: (AcquisitionProgress) -> Unit,
     ): Result<AcquisitionResult> = withContext(Dispatchers.IO) {
         runCatching {
@@ -130,10 +131,24 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
             try {
                 val request = YoutubeDLRequest(source).apply {
                     addOption("--no-playlist")
-                    addOption("--format", "bestaudio/best")
-                    addOption("--extract-audio")
-                    addOption("--audio-format", "mp3")
-                    addOption("--audio-quality", "192K")
+                    when (preset) {
+                        AcquisitionPreset.MP3_192 -> {
+                            addOption("--format", "bestaudio/best")
+                            addOption("--extract-audio")
+                            addOption("--audio-format", "mp3")
+                            addOption("--audio-quality", "192K")
+                        }
+                        AcquisitionPreset.M4A_192 -> {
+                            addOption("--format", "bestaudio/best")
+                            addOption("--extract-audio")
+                            addOption("--audio-format", "m4a")
+                            addOption("--audio-quality", "192K")
+                        }
+                        AcquisitionPreset.VIDEO_MP4 -> {
+                            addOption("--format", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]")
+                            addOption("--merge-output-format", "mp4")
+                        }
+                    }
                     addOption("--no-write-thumbnail")
                     addOption("--no-write-info-json")
                     addOption("--output", "${jobDir.absolutePath}/wms-%(id)s.%(ext)s")
@@ -148,7 +163,7 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
                             onProgress(
                                 AcquisitionProgress(
                                     percent = progress.coerceIn(0f, 100f),
-                                    message = safeProgressMessage(line),
+                                    message = safeProgressMessage(line, preset),
                                 ),
                             )
                         }
@@ -160,14 +175,14 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
                 ensureNotCanceled()
 
                 val produced = jobDir.listFiles()
-                    ?.filter { it.isFile && it.extension.equals("mp3", ignoreCase = true) }
+                    ?.filter { it.isFile && it.extension.equals(preset.extension, ignoreCase = true) }
                     ?.maxByOrNull { it.lastModified() }
                     ?: throw AcquisitionEngineException(
                         "OUTPUT_NOT_FOUND",
-                        "MP3生成後のファイルを確認できませんでした。診断: ${safeDiagnostic("${response.err}\n${response.out}")}",
+                        "${preset.displayName}生成後のファイルを確認できませんでした。診断: ${safeDiagnostic("${response.err}\n${response.out}")}",
                     )
 
-                val destinationName = "wms-${UUID.randomUUID()}.mp3"
+                val destinationName = "wms-${UUID.randomUUID()}.${preset.extension}"
                 val destination = File(outputRoot, destinationName)
                 val staging = File(outputRoot, "$destinationName.part")
 
@@ -205,8 +220,9 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
 
                     AcquisitionResult(
                         file = destination,
-                        title = info.title?.trim().orEmpty().ifBlank { "保存済み音声" },
+                        title = info.title?.trim().orEmpty().ifBlank { "保存済みメディア" },
                         provider = providerFor(sourceUrl),
+                        preset = preset,
                     )
                 } catch (error: Throwable) {
                     staging.delete()
@@ -265,10 +281,14 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
         }
     }
 
-    private fun safeProgressMessage(line: String): String {
+    private fun safeProgressMessage(line: String, preset: AcquisitionPreset): String {
         val lower = line.lowercase()
         return when {
-            "ffmpeg" in lower || "destination" in lower -> "音声を変換しています"
+            "ffmpeg" in lower || "destination" in lower -> if (preset.mediaType == "VIDEO") {
+                "映像と音声を仕上げています"
+            } else {
+                "音声を変換しています"
+            }
             "100%" in lower -> "保存を仕上げています"
             "download" in lower -> "メディアを取得しています"
             else -> "処理中"
@@ -364,7 +384,7 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
                 "no video formats found" in text ->
                 AcquisitionEngineException(
                     "FORMAT_UNAVAILABLE",
-                    "このURLでは利用可能な音声形式を取得できませんでした。",
+                    "このURLでは選択した保存形式を取得できませんでした。別の形式を選択してください。",
                     error,
                 )
             "http error 403" in text || "forbidden" in text ->

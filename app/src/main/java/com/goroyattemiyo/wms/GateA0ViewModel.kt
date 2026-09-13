@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.goroyattemiyo.wms.acquisition.AcquisitionEngineException
 import com.goroyattemiyo.wms.acquisition.AcquisitionJobStatus
+import com.goroyattemiyo.wms.acquisition.AcquisitionPreset
 import com.goroyattemiyo.wms.acquisition.ManagedAcquisitionBus
 import com.goroyattemiyo.wms.acquisition.ManagedAcquisitionService
 import com.goroyattemiyo.wms.acquisition.YoutubeDlAcquisitionEngine
@@ -386,7 +387,7 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun acquireMp3(playlistId: String? = null) {
+    fun acquire(preset: AcquisitionPreset, playlistId: String? = null) {
         val snapshot = _uiState.value
         if (
             snapshot.url.isBlank() ||
@@ -417,6 +418,7 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
         val intent = Intent(app, ManagedAcquisitionService::class.java).apply {
             action = ManagedAcquisitionService.ACTION_START
             putExtra(ManagedAcquisitionService.EXTRA_SOURCE_URL, snapshot.url.trim())
+            putExtra(ManagedAcquisitionService.EXTRA_PRESET_ID, preset.id)
             playlistId?.let { putExtra(ManagedAcquisitionService.EXTRA_PLAYLIST_ID, it) }
         }
 

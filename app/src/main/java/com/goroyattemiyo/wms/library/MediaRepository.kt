@@ -59,7 +59,7 @@ class MediaRepository internal constructor(
             "Completed media file is missing or empty"
         }
         val metadata = runCatching { metadataReader.read(file) }
-            .getOrElse { LocalMediaMetadata(null, 0L, "audio/mpeg") }
+            .getOrElse { LocalMediaMetadata(null, 0L, acquisition.preset.mimeType) }
         val entity = MediaEntity(
             id = file.nameWithoutExtension,
             title = acquisition.title.ifBlank { metadata.title ?: file.nameWithoutExtension },
@@ -67,7 +67,7 @@ class MediaRepository internal constructor(
             originalUrl = originalUrl,
             localPath = file.absolutePath,
             mimeType = metadata.mimeType,
-            mediaType = "AUDIO",
+            mediaType = acquisition.preset.mediaType,
             durationMs = metadata.durationMs,
             fileSize = file.length(),
             artworkUrl = null,
@@ -84,11 +84,17 @@ class MediaRepository internal constructor(
         acquiredDirectory.listFiles()
             .orEmpty()
             .asSequence()
-            .filter { it.isFile && it.extension.equals("mp3", ignoreCase = true) && it.length() > 0L }
+            .filter {
+                it.isFile &&
+                    it.extension.lowercase() in SUPPORTED_EXTENSIONS &&
+                    it.length() > 0L
+            }
             .filterNot { it.absolutePath in knownPaths }
             .forEach { file ->
                 val metadata = runCatching { metadataReader.read(file) }
-                    .getOrElse { LocalMediaMetadata(null, 0L, "audio/mpeg") }
+                    .getOrElse {
+                        LocalMediaMetadata(null, 0L, mimeTypeForExtension(file.extension))
+                    }
                 mediaDao.upsert(
                     MediaEntity(
                         id = file.nameWithoutExtension,
@@ -97,7 +103,7 @@ class MediaRepository internal constructor(
                         originalUrl = "",
                         localPath = file.absolutePath,
                         mimeType = metadata.mimeType,
-                        mediaType = "AUDIO",
+                        mediaType = if (file.extension.equals("mp4", ignoreCase = true)) "VIDEO" else "AUDIO",
                         durationMs = metadata.durationMs,
                         fileSize = file.length(),
                         artworkUrl = null,
@@ -137,6 +143,14 @@ class MediaRepository internal constructor(
     }
 
     companion object {
+        private val SUPPORTED_EXTENSIONS = setOf("mp3", "m4a", "mp4")
+
+        private fun mimeTypeForExtension(extension: String): String = when (extension.lowercase()) {
+            "m4a" -> "audio/mp4"
+            "mp4" -> "video/mp4"
+            else -> "audio/mpeg"
+        }
+
         fun create(context: Context, mediaDao: MediaDao): MediaRepository {
             val directory = File(
                 context.getExternalFilesDir(Environment.DIRECTORY_MUSIC) ?: context.filesDir,

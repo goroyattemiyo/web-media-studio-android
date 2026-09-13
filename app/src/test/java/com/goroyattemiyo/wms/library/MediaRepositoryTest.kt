@@ -1,6 +1,7 @@
 package com.goroyattemiyo.wms.library
 
 import com.goroyattemiyo.wms.acquisition.AcquisitionResult
+import com.goroyattemiyo.wms.acquisition.AcquisitionPreset
 import java.io.File
 import java.nio.file.Files
 import kotlinx.coroutines.flow.Flow
@@ -56,6 +57,35 @@ class MediaRepositoryTest {
         assertEquals("existing", imported.id)
         assertEquals("Embedded title", imported.title)
         assertEquals("Local", imported.provider)
+    }
+
+    @Test
+    fun registerVideoUsesPresetMediaTypeAndMimeFallback() = runTest {
+        val file = File(root, "wms-video.mp4").apply { writeBytes(byteArrayOf(1, 2)) }
+        val fallbackRepository = MediaRepository(
+            dao,
+            root,
+            LocalMediaMetadataReader { error("unreadable metadata") },
+        )
+
+        val entity = fallbackRepository.registerAcquisition(
+            AcquisitionResult(file, "Video", "Web", AcquisitionPreset.VIDEO_MP4),
+            "https://example.com/video",
+        )
+
+        assertEquals("VIDEO", entity.mediaType)
+        assertEquals("video/mp4", entity.mimeType)
+    }
+
+    @Test
+    fun importExistingFilesBackfillsM4aAndMp4() = runTest {
+        File(root, "audio.m4a").writeBytes(byteArrayOf(1))
+        File(root, "video.mp4").writeBytes(byteArrayOf(2))
+
+        repository.importExistingFiles()
+
+        assertEquals(setOf("audio", "video"), dao.rows.value.map { it.id }.toSet())
+        assertEquals("VIDEO", dao.rows.value.single { it.id == "video" }.mediaType)
     }
 
     @Test

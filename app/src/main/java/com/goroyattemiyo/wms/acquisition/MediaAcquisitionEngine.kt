@@ -22,15 +22,33 @@ data class AcquisitionResult(
     val file: File,
     val title: String,
     val provider: String,
+    val preset: AcquisitionPreset = AcquisitionPreset.MP3_192,
 )
+
+enum class AcquisitionPreset(
+    val id: String,
+    val displayName: String,
+    val mediaType: String,
+    val extension: String,
+    val mimeType: String,
+) {
+    MP3_192("mp3-192", "MP3 · 192 kbps", "AUDIO", "mp3", "audio/mpeg"),
+    M4A_192("m4a-192", "M4A · 192 kbps", "AUDIO", "m4a", "audio/mp4"),
+    VIDEO_MP4("video-mp4", "Video · MP4", "VIDEO", "mp4", "video/mp4");
+
+    companion object {
+        fun fromId(id: String?): AcquisitionPreset = entries.firstOrNull { it.id == id } ?: MP3_192
+    }
+}
 
 interface MediaAcquisitionEngine {
     suspend fun initialize(): EngineState
 
     suspend fun probe(sourceUrl: String): Result<ProbeResult>
 
-    suspend fun acquireMp3(
+    suspend fun acquire(
         sourceUrl: String,
+        preset: AcquisitionPreset,
         onProgress: (AcquisitionProgress) -> Unit,
     ): Result<AcquisitionResult>
 

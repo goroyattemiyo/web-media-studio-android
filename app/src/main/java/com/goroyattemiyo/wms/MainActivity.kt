@@ -3,6 +3,7 @@ package com.goroyattemiyo.wms
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
@@ -112,6 +113,13 @@ private fun WmsRoot(
         ?: libraryMedia.firstOrNull()
     val playbackController = rememberPlaybackController()
 
+    BackHandler(enabled = appearanceOpen || nowPlayingOpen) {
+        when {
+            appearanceOpen -> appearanceOpen = false
+            nowPlayingOpen -> nowPlayingOpen = false
+        }
+    }
+
     fun requestPlayback(media: MediaEntity, queue: List<MediaEntity>) {
         nextPlaybackRequestId += 1
         playbackRequest = PlaybackRequest(nextPlaybackRequestId, media.id, queue)
@@ -160,7 +168,7 @@ private fun WmsRoot(
                     )
                 } else if (nowPlayingOpen) {
                     NowPlayingScreen(
-                        title = selectedMedia?.title.orEmpty(),
+                        media = selectedMedia,
                         onBack = { nowPlayingOpen = false },
                         visualizerMode = if (appearance.reducedMotion) {
                             VisualizerMode.MINIMAL
@@ -170,7 +178,6 @@ private fun WmsRoot(
                         reducedMotion = appearance.reducedMotion,
                         onVisualizerSelected = appearanceViewModel::selectVisualizer,
                         controller = playbackController,
-                        isVideo = selectedMedia?.mediaType == "VIDEO",
                     )
                 } else when (selectedTab) {
                     AppTab.SEARCH -> SearchHome(
@@ -205,6 +212,15 @@ private fun WmsRoot(
                             libraryViewModel.select(media)
                             requestPlayback(media, listOf(media))
                         },
+                        currentMedia = selectedMedia,
+                        playbackController = playbackController,
+                        visualizerMode = if (appearance.reducedMotion) {
+                            VisualizerMode.MINIMAL
+                        } else {
+                            appearance.visualizer
+                        },
+                        reducedMotion = appearance.reducedMotion,
+                        onOpenPlayer = { nowPlayingOpen = true },
                     )
                     AppTab.LIBRARY -> LibraryScreen(
                         media = libraryMedia,

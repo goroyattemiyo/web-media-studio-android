@@ -48,13 +48,17 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.media3.session.MediaController
 import com.goroyattemiyo.wms.GateA0UiState
 import com.goroyattemiyo.wms.R
 import com.goroyattemiyo.wms.SearchUiState
 import com.goroyattemiyo.wms.library.MediaEntity
+import com.goroyattemiyo.wms.playback.VisualizerMode
 import com.goroyattemiyo.wms.search.SearchMediaItem
 import com.goroyattemiyo.wms.ui.components.formatDuration
 import com.goroyattemiyo.wms.ui.components.isDirectUrl
+import com.goroyattemiyo.wms.ui.media.MediaArtwork
+import com.goroyattemiyo.wms.ui.media.toMediaPresentation
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -72,6 +76,11 @@ fun SearchHome(
     developerOpen: Boolean,
     recentMedia: List<MediaEntity>,
     onPlayRecent: (MediaEntity) -> Unit,
+    currentMedia: MediaEntity?,
+    playbackController: MediaController?,
+    visualizerMode: VisualizerMode,
+    reducedMotion: Boolean,
+    onOpenPlayer: () -> Unit,
 ) {
     val context = LocalContext.current
     var menuOpen by remember { mutableStateOf(false) }
@@ -139,6 +148,16 @@ fun SearchHome(
                         )
                     }
                 }
+            }
+
+            currentMedia?.let { media ->
+                CurrentMediaStage(
+                    media = media,
+                    controller = playbackController,
+                    visualizerMode = visualizerMode,
+                    reducedMotion = reducedMotion,
+                    onOpenPlayer = onOpenPlayer,
+                )
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -223,21 +242,24 @@ fun SearchHome(
             if (recentMedia.isNotEmpty() && searchState.results.isEmpty()) {
                 Text("最近追加", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 recentMedia.forEach { media ->
+                    val presentation = remember(media) { media.toMediaPresentation() }
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Row(
                             modifier = Modifier.padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            Image(
-                                painter = painterResource(R.drawable.wms_emblem),
-                                contentDescription = null,
-                                modifier = Modifier.size(46.dp),
+                            MediaArtwork(
+                                media = presentation,
+                                contentDescription = presentation.title,
+                                modifier = Modifier
+                                    .size(54.dp)
+                                    .clip(RoundedCornerShape(12.dp)),
                             )
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(media.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 Text(
-                                    "${media.provider} · ${media.mediaType.lowercase()}",
+                                    "${presentation.secondaryLabel} · ${media.mediaType.lowercase()}",
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     style = MaterialTheme.typography.bodySmall,
                                 )
@@ -392,4 +414,3 @@ private fun DeveloperStatusCard(state: GateA0UiState) {
         }
     }
 }
-

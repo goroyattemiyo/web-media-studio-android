@@ -143,3 +143,31 @@ Target-device verification on Redmi 12 5G / Android 15:
 
 Next: redesign Home around a Current Media Stage with first-class audio visualizer and
 inline video, then use artwork in Recently Added.
+
+## Checkpoint 4 — Home Current Media Stage
+
+- [x] added a shared `MediaVisualSurface` so audio and video use the same media-first
+  presentation contract in Home and Player
+- [x] added the Home Current Media Stage above search, with title, author/provider,
+  tap-to-open Player, and the selected visualizer for audio
+- [x] render playing video inline on Home with the existing Media3 session rather than
+  requiring a separate Player screen
+- [x] use the common artwork resolver in Recently Added cards
+- [x] added Android Back handling so Player and Appearance return to the underlying
+  WMS screen instead of closing the app
+- [x] `testDebugUnitTest`
+- [x] `lintDebug`
+- [x] `assembleDebug`
+
+Target-device verification on Redmi 12 5G / Android 15:
+
+- [x] an audio item rendered the artwork and selected visualizer in Home Current Media
+  Stage
+- [x] an inline YouTube video rendered in Home and visibly advanced across two captured
+  playback frames without opening Player
+- [x] tapping the Current Media Stage opened Now Playing
+- [x] Android Back from Now Playing returned to Home
+- [x] update installation retained the existing media collection and playback selection
+
+Next: Checkpoint 5 consolidates the separate Playlist destination into Library's
+All / Playlists experience, then changes primary navigation to Home / Library / Player.

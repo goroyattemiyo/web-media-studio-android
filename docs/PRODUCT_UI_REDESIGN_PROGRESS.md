@@ -41,5 +41,21 @@ the Activity file.
 - [x] `lintDebug`
 - [x] `assembleDebug`
 
-Next: continue Checkpoint 1 by extracting Home/Search, Library/Playlist, Import, Mini
-Player, and full Player surfaces before changing their product layout.
+Verified commit: `2166f67`
+
+### Checkpoint 1B
+
+- [x] moved the persistent Mini Player and its Media3 state synchronization into `ui/playback`
+- [x] moved MediaController connection lifecycle into `ui/playback`
+- [x] moved the complete audio visualizer/video Now Playing surface into `ui/player`
+- [x] retained the playback service/session as the single playback state owner
+- [x] reduced `MainActivity.kt` from 1,754 to 1,317 lines without changing playback behavior
+- [x] `testDebugUnitTest`
+- [x] `lintDebug`
+- [x] `assembleDebug`
+
+Real-device verification is deferred until a presentation or interaction change is made;
+this checkpoint only relocates already verified Compose code.
+
+Next: finish Checkpoint 1 by extracting Home/Search, Library/Playlist, and Import before
+changing their product layout.

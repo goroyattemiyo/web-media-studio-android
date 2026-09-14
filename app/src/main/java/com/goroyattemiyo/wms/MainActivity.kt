@@ -1,6 +1,5 @@
 package com.goroyattemiyo.wms
 
-import android.content.ComponentName
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -9,7 +8,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -45,17 +43,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -66,27 +56,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.media3.common.C
-import androidx.media3.common.Player
 import androidx.media3.session.MediaController
-import androidx.media3.session.SessionToken
-import androidx.media3.ui.PlayerView
-import androidx.core.content.ContextCompat
-import com.goroyattemiyo.wms.playback.PlaybackService
-import com.goroyattemiyo.wms.playback.AudioAnalysisFrame
-import com.goroyattemiyo.wms.playback.LightweightVisualizerRenderer
-import com.goroyattemiyo.wms.playback.PcmAudioAnalysisBus
 import com.goroyattemiyo.wms.playback.VisualizerMode
-import com.goroyattemiyo.wms.playback.toPlaybackMediaItem
 import com.goroyattemiyo.wms.appearance.AppearanceSettings
 import com.goroyattemiyo.wms.appearance.AppearanceViewModel
 import com.goroyattemiyo.wms.acquisition.AcquisitionPreset
@@ -103,11 +81,13 @@ import com.goroyattemiyo.wms.ui.components.formatPlaybackTime
 import com.goroyattemiyo.wms.ui.navigation.AppTab
 import com.goroyattemiyo.wms.ui.navigation.BottomNavigation
 import com.goroyattemiyo.wms.ui.playback.PlaybackRequest
+import com.goroyattemiyo.wms.ui.playback.SavedMiniPlayer
+import com.goroyattemiyo.wms.ui.playback.rememberPlaybackController
+import com.goroyattemiyo.wms.ui.player.NowPlayingScreen
 import com.goroyattemiyo.wms.ui.theme.WmsTheme
 import java.io.File
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
@@ -1330,423 +1310,6 @@ private fun PlaylistNameDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("戻る") } },
     )
-}
-
-@Composable
-private fun SavedMiniPlayer(
-    controller: MediaController?,
-    media: MediaEntity,
-    playbackRequest: PlaybackRequest?,
-    onPositionChanged: (Long) -> Unit,
-    onMediaTransition: (String) -> Unit,
-    onOpenNowPlaying: () -> Unit,
-    expanded: Boolean,
-) {
-    val fileAvailable = remember(media.localPath) {
-        File(media.localPath).let { it.exists() && it.length() > 0L }
-    }
-    var isPlaying by remember { mutableStateOf(false) }
-    var playbackState by remember { mutableIntStateOf(Player.STATE_IDLE) }
-    var positionMs by remember { mutableLongStateOf(0L) }
-    var durationMs by remember { mutableLongStateOf(0L) }
-    var isSeeking by remember { mutableStateOf(false) }
-    var seekFraction by remember { mutableFloatStateOf(0f) }
-    var lastPersistedPositionMs by remember(media.id) { mutableLongStateOf(media.lastPositionMs) }
-
-    DisposableEffect(controller) {
-        if (controller == null) return@DisposableEffect onDispose {}
-        val listener = object : Player.Listener {
-            override fun onIsPlayingChanged(playing: Boolean) {
-                isPlaying = playing
-            }
-
-            override fun onPlaybackStateChanged(state: Int) {
-                playbackState = state
-            }
-
-            override fun onMediaItemTransition(item: androidx.media3.common.MediaItem?, reason: Int) {
-                item?.mediaId?.takeIf(String::isNotBlank)?.let(onMediaTransition)
-            }
-        }
-        controller.addListener(listener)
-        isPlaying = controller.isPlaying
-        playbackState = controller.playbackState
-        controller.currentMediaItem?.mediaId?.takeIf(String::isNotBlank)?.let(onMediaTransition)
-        onDispose {
-            controller.removeListener(listener)
-        }
-    }
-
-    LaunchedEffect(controller) {
-        while (true) {
-            val knownDuration = controller?.duration ?: C.TIME_UNSET
-            durationMs = if (knownDuration == C.TIME_UNSET || knownDuration < 0L) {
-                0L
-            } else {
-                knownDuration
-            }
-            if (!isSeeking) {
-                positionMs = (controller?.currentPosition ?: 0L)
-                    .coerceIn(0L, durationMs.coerceAtLeast(0L))
-            }
-            if (controller?.isPlaying == true && kotlin.math.abs(positionMs - lastPersistedPositionMs) >= 5_000L) {
-                lastPersistedPositionMs = positionMs
-                onPositionChanged(positionMs)
-            }
-            delay(if (controller?.isPlaying == true) 250L else 750L)
-        }
-    }
-
-    val displayedPositionMs = if (isSeeking && durationMs > 0L) {
-        (seekFraction * durationMs).toLong()
-    } else {
-        positionMs
-    }
-    val displayedFraction = when {
-        durationMs <= 0L -> 0f
-        isSeeking -> seekFraction
-        else -> (positionMs.toDouble() / durationMs.toDouble()).toFloat().coerceIn(0f, 1f)
-    }
-    val statusText = when {
-        !fileAvailable -> "Local · ファイルを開けません"
-        playbackState == Player.STATE_BUFFERING -> "Local · 読み込み中"
-        playbackState == Player.STATE_READY && isPlaying -> "Local · 再生中"
-        playbackState == Player.STATE_READY -> "Local · 一時停止"
-        playbackState == Player.STATE_ENDED -> "Local · 再生完了"
-        else -> "Local · 準備中"
-    }
-
-    LaunchedEffect(controller, playbackRequest) {
-        if (controller != null && playbackRequest != null) {
-            val playableQueue = playbackRequest.queue.filter { item ->
-                File(item.localPath).let { it.exists() && it.length() > 0L }
-            }
-            val startIndex = playableQueue.indexOfFirst { it.id == playbackRequest.mediaId }
-            if (startIndex >= 0) {
-                val requestedMedia = playableQueue[startIndex]
-                controller.setMediaItems(
-                    playableQueue.map(MediaEntity::toPlaybackMediaItem),
-                    startIndex,
-                    requestedMedia.lastPositionMs.coerceAtLeast(0L),
-                )
-                controller.prepare()
-                controller.play()
-            }
-        }
-    }
-
-    Card(
-        modifier = Modifier
-            .padding(horizontal = 12.dp, vertical = 6.dp)
-            .fillMaxWidth(),
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(58.dp)
-                        .background(
-                            brush = Brush.radialGradient(
-                                listOf(Color(0x6657D8FF), Color(0x221D64FF), Color.Transparent),
-                            ),
-                            shape = RoundedCornerShape(18.dp),
-                        ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Image(
-                        painter = painterResource(R.drawable.wms_emblem),
-                        contentDescription = null,
-                        modifier = Modifier.size(42.dp),
-                    )
-                }
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(3.dp),
-                ) {
-                    Text(
-                        text = media.title,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        statusText,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    TextButton(onClick = onOpenNowPlaying) { Text("Now Playing") }
-                }
-                if (!expanded) {
-                    TextButton(
-                        onClick = {
-                            if (controller?.isPlaying == true) controller.pause() else controller?.play()
-                        },
-                        enabled = controller != null && fileAvailable,
-                    ) { Text(if (isPlaying) "停止" else "再生") }
-                    TextButton(
-                        onClick = { controller?.seekToNextMediaItem() },
-                        enabled = controller?.hasNextMediaItem() == true,
-                    ) { Text("次") }
-                }
-            }
-
-            if (expanded) {
-                Slider(
-                value = displayedFraction,
-                onValueChange = {
-                    isSeeking = true
-                    seekFraction = it
-                },
-                onValueChangeFinished = {
-                    val targetMs = (seekFraction * durationMs).toLong().coerceIn(0L, durationMs)
-                    controller?.seekTo(targetMs)
-                    positionMs = targetMs
-                    lastPersistedPositionMs = targetMs
-                    onPositionChanged(targetMs)
-                    isSeeking = false
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = controller != null && fileAvailable && durationMs > 0L,
-            )
-                Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    formatPlaybackTime(displayedPositionMs),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    formatPlaybackTime(durationMs),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-                Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedButton(
-                    onClick = {
-                        val targetMs = ((controller?.currentPosition ?: 0L) - 10_000L).coerceAtLeast(0L)
-                        controller?.seekTo(targetMs)
-                        positionMs = targetMs
-                        lastPersistedPositionMs = targetMs
-                        onPositionChanged(targetMs)
-                    },
-                    modifier = Modifier.weight(1f),
-                    enabled = controller != null && fileAvailable && durationMs > 0L,
-                ) {
-                    Text("−10秒")
-                }
-                Button(
-                    onClick = {
-                        if (controller?.isPlaying == true) {
-                            controller.pause()
-                            lastPersistedPositionMs = controller.currentPosition
-                            onPositionChanged(controller.currentPosition)
-                        } else {
-                            if (controller?.playbackState == Player.STATE_ENDED) controller.seekTo(0L)
-                            controller?.play()
-                        }
-                    },
-                    modifier = Modifier.weight(1.4f),
-                    enabled = controller != null && fileAvailable,
-                ) {
-                    Text(if (isPlaying) "一時停止" else "再生")
-                }
-                OutlinedButton(
-                    onClick = {
-                        val targetMs = ((controller?.currentPosition ?: 0L) + 10_000L).coerceAtMost(durationMs)
-                        controller?.seekTo(targetMs)
-                        positionMs = targetMs
-                        lastPersistedPositionMs = targetMs
-                        onPositionChanged(targetMs)
-                    },
-                    modifier = Modifier.weight(1f),
-                    enabled = controller != null && fileAvailable && durationMs > 0L,
-                ) {
-                    Text("+10秒")
-                }
-            }
-                Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedButton(
-                    onClick = { controller?.seekToPreviousMediaItem() },
-                    modifier = Modifier.weight(1f),
-                    enabled = controller?.hasPreviousMediaItem() == true,
-                ) {
-                    Text("前へ")
-                }
-                OutlinedButton(
-                    onClick = { controller?.seekToNextMediaItem() },
-                    modifier = Modifier.weight(1f),
-                    enabled = controller?.hasNextMediaItem() == true,
-                ) {
-                    Text("次へ")
-                }
-            }
-            }
-        }
-    }
-}
-
-@Composable
-private fun rememberPlaybackController(): MediaController? {
-    val context = LocalContext.current
-    var controller by remember { mutableStateOf<MediaController?>(null) }
-
-    DisposableEffect(context) {
-        val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
-        val future = MediaController.Builder(context, token).buildAsync()
-        future.addListener(
-            { controller = runCatching { future.get() }.getOrNull() },
-            ContextCompat.getMainExecutor(context),
-        )
-        onDispose {
-            controller = null
-            MediaController.releaseFuture(future)
-        }
-    }
-    return controller
-}
-
-@Composable
-private fun NowPlayingScreen(
-    title: String,
-    onBack: () -> Unit,
-    visualizerMode: VisualizerMode,
-    reducedMotion: Boolean,
-    onVisualizerSelected: (String) -> Unit,
-    controller: MediaController?,
-    isVideo: Boolean,
-) {
-    val analysisFrame by PcmAudioAnalysisBus.frames.collectAsStateWithLifecycle(
-        initialValue = AudioAnalysisFrame(),
-    )
-    val phase = if (reducedMotion) {
-        0f
-    } else {
-        val transition = rememberInfiniteTransition(label = "wms-visualizer")
-        val animatedPhase by transition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(1_800, easing = LinearEasing)),
-            label = "visualizer-phase",
-        )
-        animatedPhase
-    }
-    val renderState = LightweightVisualizerRenderer.render(
-        visualizerMode,
-        analysisFrame.copy(phase = phase),
-    )
-    val visualPrimary = MaterialTheme.colorScheme.primary
-    val visualSecondary = MaterialTheme.colorScheme.secondary
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-    ) {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            TextButton(onClick = onBack) { Text("戻る") }
-        }
-        Text("Now Playing", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Box(
-            modifier = Modifier
-                .size(240.dp)
-                .background(
-                    Brush.radialGradient(
-                        listOf(Color(0xAA57D8FF), Color(0x553B55FF), Color.Transparent),
-                    ),
-                    RoundedCornerShape(48.dp),
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (isVideo && controller != null) {
-                AndroidView(
-                    factory = { context ->
-                        PlayerView(context).apply {
-                            useController = false
-                            player = controller
-                        }
-                    },
-                    update = { it.player = controller },
-                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(36.dp)),
-                )
-            } else {
-                Canvas(Modifier.fillMaxSize()) {
-                    drawCircle(
-                        color = visualPrimary.copy(alpha = renderState.emphasis),
-                        radius = size.minDimension * (0.32f + renderState.emphasis * 0.08f),
-                        style = Stroke(width = 5.dp.toPx()),
-                    )
-                    val step = size.width / (renderState.values.size + 1)
-                    renderState.values.forEachIndexed { index, value ->
-                        val x = step * (index + 1)
-                        val halfHeight = size.height * value * 0.22f
-                        drawLine(
-                            color = visualSecondary.copy(alpha = 0.35f + value * 0.6f),
-                            start = androidx.compose.ui.geometry.Offset(x, center.y - halfHeight),
-                            end = androidx.compose.ui.geometry.Offset(x, center.y + halfHeight),
-                            strokeWidth = 4.dp.toPx(),
-                        )
-                    }
-                }
-                Image(
-                    painter = painterResource(R.drawable.wms_emblem),
-                    contentDescription = "WMS",
-                    modifier = Modifier.size(150.dp),
-                )
-            }
-        }
-        Text(
-            title.ifBlank { "WMS Local Player" },
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            "端末内メディア · MediaSession",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(if (isVideo) "Video · MP4" else "Visualizer: ${visualizerMode.id}", fontWeight = FontWeight.Bold)
-        if (reducedMotion) {
-            Text(
-                "モーション軽減中 · minimal を使用",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-        if (!isVideo) Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            VisualizerMode.entries.forEach { mode ->
-                OutlinedButton(
-                    onClick = { onVisualizerSelected(mode.id) },
-                    enabled = !reducedMotion,
-                ) {
-                    Text(if (mode == visualizerMode) "✓ ${mode.id}" else mode.id)
-                }
-            }
-        }
-    }
 }
 
 private fun isDirectUrl(value: String): Boolean = URL_PATTERN.matches(value.trim())

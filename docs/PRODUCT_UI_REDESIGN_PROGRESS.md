@@ -57,5 +57,19 @@ Verified commit: `2166f67`
 Real-device verification is deferred until a presentation or interaction change is made;
 this checkpoint only relocates already verified Compose code.
 
-Next: finish Checkpoint 1 by extracting Home/Search, Library/Playlist, and Import before
-changing their product layout.
+Verified commit: `7482ca7`
+
+### Checkpoint 1C
+
+- [x] moved Home/Search presentation, search result cards, thumbnail loading, and developer status into `ui/home`
+- [x] moved direct-URL classification into a shared `ui/components` utility
+- [x] added unit coverage for direct URL versus search-term classification
+- [x] reduced `MainActivity.kt` from 1,317 to 980 lines without changing Home/Search behavior
+- [x] `testDebugUnitTest`
+- [x] `lintDebug`
+- [x] `assembleDebug`
+
+Real-device verification is deferred for the same reason as Checkpoint 1B.
+
+Next: finish Checkpoint 1 by extracting Library/Playlist and Import before changing
+their product layout.

@@ -254,7 +254,6 @@ private fun WmsRoot(
                             libraryMedia.firstOrNull { it.id == mediaId }?.let(libraryViewModel::select)
                         },
                         onOpenNowPlaying = { nowPlayingOpen = true },
-                        expanded = nowPlayingOpen,
                     )
                 }
                 BottomNavigation(

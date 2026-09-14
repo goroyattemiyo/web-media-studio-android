@@ -115,3 +115,31 @@ Device migration check on Redmi 12 5G / Android 15:
 
 Next: connect the common artwork/presentation model to the practical Mini Player and
 verify thumbnail, seek, Previous, Play/Pause, Next, and MediaSession synchronization.
+
+Verified commit: `624cedf`
+
+## Checkpoint 3 — practical Mini Player
+
+- [x] replaced the generic WMS emblem with the common media artwork component
+- [x] show title plus author/provider secondary metadata
+- [x] keep current position, duration, and seek control visible in the compact player
+- [x] keep Previous, Play/Pause, and Next visible with queue-aware enabled states
+- [x] synchronize playback, timeline, and media transitions from the existing MediaController
+- [x] tapping the non-control media body opens Now Playing
+- [x] removed the separate expanded Mini Player control layout
+- [x] `testDebugUnitTest`
+- [x] `lintDebug`
+- [x] `assembleDebug`
+
+Target-device verification on Redmi 12 5G / Android 15:
+
+- [x] retained Instagram video displays a generated local video frame instead of WMS fallback artwork
+- [x] three-item Playlist starts with MediaSession playback and queue-aware controls
+- [x] Next transitions to the following item and disables at the queue end
+- [x] Previous transitions back to the preceding item
+- [x] seek moved playback from approximately `1:04` to `3:12`
+- [x] Play/Pause matched MediaSession `PLAYING` / `PAUSED` state
+- [x] tapping the media body opened Now Playing
+
+Next: redesign Home around a Current Media Stage with first-class audio visualizer and
+inline video, then use artwork in Recently Added.

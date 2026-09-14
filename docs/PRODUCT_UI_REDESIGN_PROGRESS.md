@@ -71,5 +71,21 @@ Verified commit: `7482ca7`
 
 Real-device verification is deferred for the same reason as Checkpoint 1B.
 
-Next: finish Checkpoint 1 by extracting Library/Playlist and Import before changing
-their product layout.
+Verified commit: `6e30217`
+
+### Checkpoint 1D — architecture split complete
+
+- [x] moved the Import Sheet and its format/error presentation into `ui/importer`
+- [x] moved the Library screen into `ui/library`
+- [x] moved the current Playlist screen/dialog into `ui/library` in preparation for consolidation
+- [x] retained `MainActivity.kt` as Activity/share intake and root state/navigation orchestration
+- [x] reduced `MainActivity.kt` from 980 to 295 lines
+- [x] `testDebugUnitTest`
+- [x] `lintDebug`
+- [x] `assembleDebug`
+
+Real-device verification is deferred for the same reason as Checkpoint 1B. Checkpoint 1
+is complete with no intentional presentation or interaction changes.
+
+Next: Checkpoint 2 adds the metadata/artwork foundation with an explicit Room migration,
+then the practical Mini Player redesign begins.

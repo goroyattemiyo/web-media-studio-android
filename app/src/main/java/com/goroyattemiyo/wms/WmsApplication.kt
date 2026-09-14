@@ -21,7 +21,10 @@ class WmsApplication : Application() {
             applicationContext,
             WmsDatabase::class.java,
             "wms.db",
-        ).addMigrations(WmsDatabase.MIGRATION_1_2)
+        ).addMigrations(
+            WmsDatabase.MIGRATION_1_2,
+            WmsDatabase.MIGRATION_2_3,
+        )
             .build()
     }
 

@@ -66,6 +66,8 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
             ProbeResult(
                 title = info.title?.trim().orEmpty().ifBlank { "タイトル不明" },
                 provider = providerFor(sourceUrl),
+                author = info.uploader?.trim()?.takeIf(String::isNotBlank),
+                artworkUrl = info.thumbnail?.trim()?.takeIf(::isSafeArtworkUrl),
             )
         }
     }
@@ -223,6 +225,8 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
                         title = info.title?.trim().orEmpty().ifBlank { "保存済みメディア" },
                         provider = providerFor(sourceUrl),
                         preset = preset,
+                        author = info.uploader?.trim()?.takeIf(String::isNotBlank),
+                        artworkUrl = info.thumbnail?.trim()?.takeIf(::isSafeArtworkUrl),
                     )
                 } catch (error: Throwable) {
                     staging.delete()
@@ -242,6 +246,11 @@ class YoutubeDlAcquisitionEngine(context: Context) : MediaAcquisitionEngine {
         cancelRequested.set(true)
         runCatching { YoutubeDL.getInstance().destroyProcessById(PROCESS_ID) }
     }
+
+    private fun isSafeArtworkUrl(value: String): Boolean = runCatching {
+        val uri = URI(value)
+        uri.scheme.equals("https", ignoreCase = true) && !uri.host.isNullOrBlank()
+    }.getOrDefault(false)
 
     private fun ensureNotCanceled() {
         if (cancelRequested.get()) {

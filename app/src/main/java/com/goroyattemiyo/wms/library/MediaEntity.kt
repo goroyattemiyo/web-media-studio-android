@@ -8,6 +8,7 @@ data class MediaEntity(
     @PrimaryKey val id: String,
     val title: String,
     val provider: String,
+    val author: String?,
     val originalUrl: String,
     val localPath: String,
     val mimeType: String,

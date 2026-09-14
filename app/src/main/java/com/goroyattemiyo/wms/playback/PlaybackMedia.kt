@@ -12,9 +12,14 @@ fun MediaEntity.toPlaybackMediaItem(): MediaItem = MediaItem.Builder()
     .setMediaMetadata(
         MediaMetadata.Builder()
             .setTitle(title)
-            .setArtist(provider)
+            .setArtist(author ?: provider)
             .setIsPlayable(true)
-            .setArtworkUri(Uri.parse("android.resource://com.goroyattemiyo.wms/drawable/wms_emblem"))
+            .setArtworkUri(
+                artworkUrl
+                    ?.takeIf(String::isNotBlank)
+                    ?.let(Uri::parse)
+                    ?: Uri.parse("android.resource://com.goroyattemiyo.wms/drawable/wms_emblem"),
+            )
             .build(),
     )
     .build()

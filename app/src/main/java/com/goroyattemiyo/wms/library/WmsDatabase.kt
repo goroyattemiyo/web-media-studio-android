@@ -10,7 +10,7 @@ import com.goroyattemiyo.wms.playlist.PlaylistEntryEntity
 
 @Database(
     entities = [MediaEntity::class, PlaylistEntity::class, PlaylistEntryEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class WmsDatabase : RoomDatabase() {
@@ -46,6 +46,12 @@ abstract class WmsDatabase : RoomDatabase() {
                 db.execSQL(
                     "CREATE INDEX IF NOT EXISTS `index_playlist_entries_mediaId` ON `playlist_entries` (`mediaId`)",
                 )
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `media` ADD COLUMN `author` TEXT")
             }
         }
     }

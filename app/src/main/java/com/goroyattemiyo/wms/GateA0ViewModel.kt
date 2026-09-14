@@ -33,6 +33,8 @@ data class GateA0UiState(
     val probing: Boolean = false,
     val detectedTitle: String? = null,
     val detectedProvider: String? = null,
+    val detectedAuthor: String? = null,
+    val detectedArtworkUrl: String? = null,
     val rightsConfirmed: Boolean = false,
     val acquiring: Boolean = false,
     val progressPercent: Float = 0f,
@@ -310,6 +312,8 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
                 probing = false,
                 detectedTitle = null,
                 detectedProvider = null,
+                detectedAuthor = null,
+                detectedArtworkUrl = null,
                 rightsConfirmed = false,
                 diagnosticSucceeded = null,
                 diagnosticLines = emptyList(),
@@ -362,6 +366,8 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
                 errorMessage = null,
                 detectedTitle = null,
                 detectedProvider = null,
+                detectedAuthor = null,
+                detectedArtworkUrl = null,
             )
         }
 
@@ -374,6 +380,8 @@ class GateA0ViewModel(application: Application) : AndroidViewModel(application) 
                                 probing = false,
                                 detectedTitle = probe.title,
                                 detectedProvider = probe.provider,
+                                detectedAuthor = probe.author,
+                                detectedArtworkUrl = probe.artworkUrl,
                             )
                         }
                     }

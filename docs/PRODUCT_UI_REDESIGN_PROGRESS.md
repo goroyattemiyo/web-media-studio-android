@@ -89,3 +89,29 @@ is complete with no intentional presentation or interaction changes.
 
 Next: Checkpoint 2 adds the metadata/artwork foundation with an explicit Room migration,
 then the practical Mini Player redesign begins.
+
+Verified commit: `4600914`
+
+## Checkpoint 2 — metadata / artwork foundation
+
+- [x] extended acquisition Probe/results with source author and HTTPS thumbnail metadata
+- [x] persisted acquired author and source artwork instead of writing `artworkUrl = null`
+- [x] advanced Room schema from v2 to v3 with explicit `MIGRATION_2_3`; no destructive fallback
+- [x] committed generated Room schema v3
+- [x] propagated real author/artwork into Media3 metadata with WMS artwork as fallback
+- [x] added one reusable media presentation model for Home, Library, Playlist, Mini Player, and Player
+- [x] established artwork priority: persisted source thumbnail, embedded audio art/local video frame, WMS fallback
+- [x] added a bounded HTTPS/local/embedded/frame artwork resolver with in-memory caching
+- [x] added unit coverage for metadata persistence and artwork ordering/fallback behavior
+- [x] `testDebugUnitTest`
+- [x] `lintDebug`
+- [x] `assembleDebug`
+
+Device migration check on Redmi 12 5G / Android 15:
+
+- [x] update installation over retained A8 data succeeded
+- [x] app restarted without Room or AndroidRuntime errors
+- [x] existing Recently Added data and selected Mini Player media remained visible
+
+Next: connect the common artwork/presentation model to the practical Mini Player and
+verify thumbnail, seek, Previous, Play/Pause, Next, and MediaSession synchronization.

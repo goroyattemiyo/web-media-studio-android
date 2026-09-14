@@ -31,13 +31,21 @@ class MediaRepositoryTest {
         val file = File(root, "wms-123.mp3").apply { writeBytes(byteArrayOf(1, 2, 3)) }
 
         val entity = repository.registerAcquisition(
-            AcquisitionResult(file, "Detected title", "YouTube"),
+            AcquisitionResult(
+                file = file,
+                title = "Detected title",
+                provider = "YouTube",
+                author = "Channel name",
+                artworkUrl = "https://example.com/thumb.jpg",
+            ),
             "https://example.com/watch/123",
         )
 
         assertEquals("wms-123", entity.id)
         assertEquals("Detected title", entity.title)
         assertEquals("YouTube", entity.provider)
+        assertEquals("Channel name", entity.author)
+        assertEquals("https://example.com/thumb.jpg", entity.artworkUrl)
         assertEquals("https://example.com/watch/123", entity.originalUrl)
         assertEquals(42_000L, entity.durationMs)
         assertEquals(3L, entity.fileSize)
@@ -123,6 +131,7 @@ class MediaRepositoryTest {
             id = "outside",
             title = "Outside",
             provider = "Local",
+            author = null,
             originalUrl = "",
             localPath = outsideFile.absolutePath,
             mimeType = "audio/mpeg",

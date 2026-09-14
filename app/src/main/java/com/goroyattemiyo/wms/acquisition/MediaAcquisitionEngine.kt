@@ -11,6 +11,8 @@ data class EngineState(
 data class ProbeResult(
     val title: String,
     val provider: String,
+    val author: String? = null,
+    val artworkUrl: String? = null,
 )
 
 data class AcquisitionProgress(
@@ -23,6 +25,8 @@ data class AcquisitionResult(
     val title: String,
     val provider: String,
     val preset: AcquisitionPreset = AcquisitionPreset.MP3_192,
+    val author: String? = null,
+    val artworkUrl: String? = null,
 )
 
 enum class AcquisitionPreset(

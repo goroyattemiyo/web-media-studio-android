@@ -5,25 +5,32 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sin
 
-enum class VisualizerMode(val id: String) {
-    RAINBOW_RING("rainbow-ring"),
-    OSCILLOSCOPE("oscilloscope"),
-    SPECTRUM_CITY("spectrum-city"),
-    NEON_TUNNEL("neon-tunnel"),
-    KALEIDO("kaleido"),
-    PARTICLES("particles"),
-    EMBLEM("emblem"),
-    PULSE("pulse"),
-    ORBIT("orbit"),
-    BARS("bars"),
-    WAVE("wave"),
-    MINIMAL("minimal"),
+enum class VisualizerMode(val id: String, val displayName: String) {
+    RAINBOW_RING("rainbow-ring", "ハイパートンネル"),
+    OSCILLOSCOPE("oscilloscope", "フォスファー・リサージュ"),
+    SPECTRUM_CITY("spectrum-city", "スペクトラムシティ"),
+    NEON_TUNNEL("neon-tunnel", "グリフレイン"),
+    KALEIDO("kaleido", "ストレンジアトラクター"),
+    PARTICLES("particles", "ボロノイ・シャーズ"),
+    EMBLEM("emblem", "エンブレムリアクター"),
+    PULSE("pulse", "リキッドメタボール"),
+    ORBIT("orbit", "フローフィールド"),
+    BARS("bars", "ワイヤーフレーム地形"),
+    WAVE("wave", "スペクトログラム滝"),
+    MINIMAL("minimal", "ミニマル"),
+    ;
+
+    companion object {
+        /** Existing persisted IDs remain valid; no DataStore migration is needed. */
+        fun fromPersistedId(id: String?): VisualizerMode = entries.firstOrNull { it.id == id } ?: EMBLEM
+    }
 }
 
 data class AudioAnalysisFrame(
     val normalizedLevel: Float = 0f,
     val phase: Float = 0f,
     val waveform: List<Float> = emptyList(),
+    val signedWaveform: List<Float> = emptyList(),
     val spectrum: List<Float> = emptyList(),
 )
 

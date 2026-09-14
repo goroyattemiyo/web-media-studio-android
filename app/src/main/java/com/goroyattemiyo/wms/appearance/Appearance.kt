@@ -2,9 +2,11 @@ package com.goroyattemiyo.wms.appearance
 
 import android.app.Application
 import android.content.Context
+import android.net.Uri
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -98,10 +100,12 @@ data class AppearanceSettings(
     val backgroundId: String = WmsBackgroundStyle.PLAIN.id,
     val visualizerId: String = VisualizerMode.EMBLEM.id,
     val reducedMotion: Boolean = false,
+    val backgroundImagePath: String? = null,
+    val backgroundBlur: Float = 0f,
 ) {
     val skin: WmsSkin get() = WmsSkinCatalog.byId(skinId)
     val visualizer: VisualizerMode
-        get() = VisualizerMode.entries.firstOrNull { it.id == visualizerId } ?: VisualizerMode.EMBLEM
+        get() = VisualizerMode.fromPersistedId(visualizerId)
     val backgroundStyle: WmsBackgroundStyle
         get() = WmsBackgroundStyle.entries.firstOrNull { it.id == backgroundId } ?: WmsBackgroundStyle.PLAIN
 }
@@ -125,6 +129,8 @@ class AppearanceRepository(private val context: Context) {
                     ?.id
                     ?: VisualizerMode.EMBLEM.id,
                 reducedMotion = preferences[REDUCED_MOTION] ?: false,
+                backgroundImagePath = preferences[BACKGROUND_IMAGE_PATH],
+                backgroundBlur = (preferences[BACKGROUND_BLUR] ?: 0f).coerceIn(0f, 24f),
             )
         }
 
@@ -147,11 +153,24 @@ class AppearanceRepository(private val context: Context) {
         context.appearanceDataStore.edit { it[REDUCED_MOTION] = enabled }
     }
 
+    suspend fun importBackgroundImage(uri: Uri) {
+        val destination = java.io.File(context.filesDir, "appearance/background-image").apply { parentFile?.mkdirs() }
+        context.contentResolver.openInputStream(uri)?.use { input -> destination.outputStream().use(input::copyTo) }
+            ?: return
+        context.appearanceDataStore.edit { it[BACKGROUND_IMAGE_PATH] = destination.absolutePath }
+    }
+
+    suspend fun setBackgroundBlur(blur: Float) {
+        context.appearanceDataStore.edit { it[BACKGROUND_BLUR] = blur.coerceIn(0f, 24f) }
+    }
+
     private companion object {
         val SKIN_ID = stringPreferencesKey("skin_id")
         val BACKGROUND_ID = stringPreferencesKey("background_id")
         val VISUALIZER_ID = stringPreferencesKey("visualizer_id")
         val REDUCED_MOTION = booleanPreferencesKey("reduced_motion")
+        val BACKGROUND_IMAGE_PATH = stringPreferencesKey("background_image_path")
+        val BACKGROUND_BLUR = floatPreferencesKey("background_blur")
     }
 }
 
@@ -163,4 +182,6 @@ class AppearanceViewModel(application: Application) : AndroidViewModel(applicati
     fun selectBackground(id: String) = viewModelScope.launch { repository.selectBackground(id) }
     fun selectVisualizer(id: String) = viewModelScope.launch { repository.selectVisualizer(id) }
     fun setReducedMotion(enabled: Boolean) = viewModelScope.launch { repository.setReducedMotion(enabled) }
+    fun importBackgroundImage(uri: Uri) = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) { repository.importBackgroundImage(uri) }
+    fun setBackgroundBlur(blur: Float) = viewModelScope.launch { repository.setBackgroundBlur(blur) }
 }

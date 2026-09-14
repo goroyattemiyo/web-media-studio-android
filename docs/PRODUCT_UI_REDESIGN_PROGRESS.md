@@ -1,6 +1,6 @@
 # WMS Android — Product UI redesign progress
 
-Last updated: 2026-09-14 JST
+Last updated: 2026-09-15 JST
 
 Branch: `plan/product-ui-redesign`
 
@@ -271,3 +271,49 @@ Initial local verification before the final theme fix:
 Next: Player parity pack decision, then final designer polish/regression including the
 new Library overflow, Import layout, and non-default skin sweep. This is a checkpoint,
 not Product UI Redesign FINAL PASS.
+
+## Checkpoint 8 — Player parity pack
+
+- [x] added service-owned Media3 playback speed choices: 0.5x, 0.75x, 1x, 1.25x,
+  1.5x, and 2x
+- [x] added persisted Media3 Repeat Off / All / One and shuffle controls
+- [x] added advanced session-only A-B loop controls with strict `A < B` validation,
+  clear, and service-side looping during background playback
+- [x] kept Full Player transport hierarchy as Previous / -10 / Play-Pause / +10 / Next
+- [x] kept Mini Player compact and excluded parity controls from it
+- [x] added testable playback-option helpers and unit coverage for speed, repeat,
+  shuffle, A-B invalid ranges, clear, and loop validation
+- [x] added `PLAYER_PARITY_PACK.md`
+
+Target-device verification on Redmi 12 5G / Android 15:
+
+- [x] user-confirmed Playback Speed, Repeat, Shuffle, and A-B loop interaction
+- [x] retained Home, Mini Player, Full Player, Playlist, background/screen-off playback,
+  notification controls, and position restore
+- [x] final APK installed over retained app data
+
+The visual/interaction polish of these controls remains part of the final Designer Polish
+checkpoint; this is not Product UI Redesign FINAL PASS.
+
+## Checkpoint 9 — Visualizer Diversity Redesign and custom background
+
+- [x] audited the existing Canvas implementation: Oscilloscope/Wave, Spectrum City/Bars,
+  and Rainbow Ring/Kaleido previously shared the same visual structure.
+- [x] retained all twelve persisted visualizer IDs and remapped them to distinct V2 visual
+  languages without deleting DataStore-compatible IDs.
+- [x] began distinct Canvas renderers for Hyper Tunnel, Phosphor Lissajous, Spectrum City,
+  Glyph Rain, Strange Attractor, Voronoi Shards, Emblem Reactor, Liquid Metaballs, Flow
+  Field, Wireframe Terrain, Spectrogram Waterfall, and Minimal.
+- [x] added a signed waveform channel and capped PCM-analysis publications to 20 Hz to
+  avoid excessive Compose redraw work.
+- [x] added custom background-image persistence: selected images are copied into WMS app
+  storage, and DataStore retains the managed path plus a 0–24 dp blur amount.
+- [x] added Appearance controls for selecting/replacing the device image and changing blur.
+- [x] ran final `testDebugUnitTest`, `lintDebug`, and `assembleDebug`
+- [x] installed the final debug APK over retained data on Redmi 12 5G on 2026-09-15
+- [x] user-confirmed the Redmi device verification as OK
+- [x] documented duplicate audit, visual languages, compatibility, performance limits,
+  inspiration research, and deferred GPU work in `VISUALIZER_DIVERSITY_REDESIGN.md`
+
+The Appearance selector can receive a separate static-preview tile polish in the final
+Designer Polish checkpoint. Product UI Redesign remains **IN PROGRESS**, not FINAL PASS.

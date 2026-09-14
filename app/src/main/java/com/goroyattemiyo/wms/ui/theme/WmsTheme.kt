@@ -1,6 +1,7 @@
 package com.goroyattemiyo.wms.ui.theme
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,6 +15,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.goroyattemiyo.wms.appearance.WmsSkin
@@ -24,6 +28,8 @@ import com.goroyattemiyo.wms.appearance.WmsSurfaceStyle
 fun WmsTheme(
     skin: WmsSkin,
     backgroundStyle: WmsBackgroundStyle = WmsBackgroundStyle.PLAIN,
+    backgroundImagePath: String? = null,
+    backgroundBlur: Float = 0f,
     content: @Composable () -> Unit,
 ) {
     val colors = if (skin.isLight) {
@@ -85,7 +91,7 @@ fun WmsTheme(
     ) {
         CompositionLocalProvider(LocalContentColor provides colors.onBackground) {
             Box(modifier = Modifier.fillMaxSize()) {
-                StaticBackground(skin, backgroundStyle)
+                StaticBackground(skin, backgroundStyle, backgroundImagePath, backgroundBlur)
                 content()
             }
         }
@@ -93,11 +99,17 @@ fun WmsTheme(
 }
 
 @Composable
-private fun StaticBackground(skin: WmsSkin, style: WmsBackgroundStyle) {
+private fun StaticBackground(skin: WmsSkin, style: WmsBackgroundStyle, imagePath: String?, blur: Float) {
     val base = Color(skin.background)
     val accent = Color(skin.primary).copy(alpha = if (skin.isLight) 0.10f else 0.14f)
+    val image = androidx.compose.runtime.remember(imagePath) {
+        imagePath?.let { android.graphics.BitmapFactory.decodeFile(it)?.asImageBitmap() }
+    }
+    image?.let {
+        Image(it, null, Modifier.fillMaxSize().blur(blur.dp), contentScale = ContentScale.Crop)
+    }
     Canvas(modifier = Modifier.fillMaxSize()) {
-        drawRect(base)
+        if (image == null) drawRect(base)
         when (style) {
             WmsBackgroundStyle.PLAIN -> Unit
             WmsBackgroundStyle.GRID -> {

@@ -36,9 +36,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.C
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
+import androidx.media3.session.SessionCommand
 import com.goroyattemiyo.wms.library.MediaEntity
+import com.goroyattemiyo.wms.playback.AbLoopState
+import com.goroyattemiyo.wms.playback.PlaybackCommand
+import com.goroyattemiyo.wms.playback.PlaybackSpeed
+import com.goroyattemiyo.wms.playback.RepeatOption
+import com.goroyattemiyo.wms.playback.toggledShuffleEnabled
 import com.goroyattemiyo.wms.playback.VisualizerMode
 import com.goroyattemiyo.wms.ui.components.formatPlaybackTime
 import kotlinx.coroutines.delay
@@ -61,6 +68,12 @@ fun NowPlayingScreen(
     var previous by remember { mutableStateOf(false) }
     var next by remember { mutableStateOf(false) }
     var visualizerMenuOpen by remember { mutableStateOf(false) }
+    var optionsOpen by remember { mutableStateOf(false) }
+    var speedMenuOpen by remember { mutableStateOf(false) }
+    var speed by remember { mutableFloatStateOf(1f) }
+    var repeatMode by remember { mutableStateOf(RepeatOption.OFF) }
+    var shuffleEnabled by remember { mutableStateOf(false) }
+    var abLoop by remember(media?.id) { mutableStateOf(AbLoopState()) }
     DisposableEffect(controller) {
         if (controller == null) return@DisposableEffect onDispose {}
         val listener = object : Player.Listener {
@@ -68,9 +81,13 @@ fun NowPlayingScreen(
             override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
                 previous = controller.hasPreviousMediaItem(); next = controller.hasNextMediaItem()
             }
+            override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) { speed = playbackParameters.speed }
+            override fun onRepeatModeChanged(mode: Int) { repeatMode = RepeatOption.fromMedia3(mode) }
+            override fun onShuffleModeEnabledChanged(enabled: Boolean) { shuffleEnabled = enabled }
         }
         controller.addListener(listener)
         playing = controller.isPlaying; previous = controller.hasPreviousMediaItem(); next = controller.hasNextMediaItem()
+        speed = controller.playbackParameters.speed; repeatMode = RepeatOption.fromMedia3(controller.repeatMode); shuffleEnabled = controller.shuffleModeEnabled
         onDispose { controller.removeListener(listener) }
     }
     LaunchedEffect(controller, media?.id) {
@@ -116,12 +133,53 @@ fun NowPlayingScreen(
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(formatPlaybackTime(shownPosition)); Text(formatPlaybackTime(duration)) }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = { controller?.seekToPreviousMediaItem() }, enabled = previous) { Text("⏮") }
+            TextButton(onClick = { controller?.seekTo(((controller?.currentPosition ?: 0L) - 10_000L).coerceAtLeast(0L)) }, enabled = controller != null) { Text("↶10") }
             Button(onClick = { if (controller?.isPlaying == true) controller.pause() else { if (controller?.playbackState == Player.STATE_ENDED) controller.seekTo(0L); controller?.play() } }, enabled = controller != null, shape = CircleShape) { Text(if (playing) "❚❚" else "▶", style = MaterialTheme.typography.headlineSmall) }
+            TextButton(onClick = { controller?.seekTo(((controller?.currentPosition ?: 0L) + 10_000L).coerceAtMost(duration)) }, enabled = controller != null && duration > 0L) { Text("10↷") }
             TextButton(onClick = { controller?.seekToNextMediaItem() }, enabled = next) { Text("⏭") }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-            TextButton(onClick = { controller?.seekTo(((controller?.currentPosition ?: 0L) - 10_000L).coerceAtLeast(0L)) }, enabled = controller != null) { Text("↶ 10秒") }
-            TextButton(onClick = { controller?.seekTo(((controller?.currentPosition ?: 0L) + 10_000L).coerceAtMost(duration)) }, enabled = controller != null && duration > 0L) { Text("10秒 ↷") }
+        TextButton(onClick = { optionsOpen = !optionsOpen }) {
+            Text(if (optionsOpen) "再生オプションを閉じる" else "再生オプション")
+        }
+        if (optionsOpen) Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("再生オプション", fontWeight = FontWeight.Bold)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Box {
+                        TextButton(onClick = { speedMenuOpen = true }) { Text("速度 ${PlaybackSpeed.label(speed)}") }
+                        DropdownMenu(expanded = speedMenuOpen, onDismissRequest = { speedMenuOpen = false }) {
+                            PlaybackSpeed.allowed.forEach { value ->
+                                DropdownMenuItem(text = { Text(if (PlaybackSpeed.normalize(speed) == value) "✓ ${PlaybackSpeed.label(value)}" else PlaybackSpeed.label(value)) }, onClick = {
+                                    controller?.playbackParameters = PlaybackParameters(value)
+                                    speedMenuOpen = false
+                                })
+                            }
+                        }
+                    }
+                    TextButton(onClick = { controller?.repeatMode = nextRepeatMode(repeatMode).media3Mode }) { Text(repeatMode.label) }
+                    TextButton(onClick = { controller?.shuffleModeEnabled = toggledShuffleEnabled(shuffleEnabled) }) { Text(if (shuffleEnabled) "シャッフル ON" else "シャッフル OFF") }
+                }
+                Text("A-B ループ", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick = {
+                        controller?.sendCustomCommand(SessionCommand(PlaybackCommand.SET_AB_A, android.os.Bundle.EMPTY), android.os.Bundle.EMPTY)
+                        abLoop = abLoop.setA(controller?.currentPosition ?: 0L)
+                    }, enabled = controller != null) { Text("Aを設定") }
+                    TextButton(onClick = {
+                        controller?.sendCustomCommand(SessionCommand(PlaybackCommand.SET_AB_B, android.os.Bundle.EMPTY), android.os.Bundle.EMPTY)
+                        abLoop = abLoop.setB(controller?.currentPosition ?: 0L)
+                    }, enabled = controller != null && abLoop.pointAMs != null) { Text("Bを設定") }
+                    TextButton(onClick = {
+                        controller?.sendCustomCommand(SessionCommand(PlaybackCommand.TOGGLE_AB, android.os.Bundle.EMPTY), android.os.Bundle.EMPTY)
+                        abLoop = abLoop.toggle()
+                    }, enabled = abLoop.isValid) { Text(if (abLoop.enabled) "ループ ON" else "ループ開始") }
+                    TextButton(onClick = {
+                        controller?.sendCustomCommand(SessionCommand(PlaybackCommand.CLEAR_AB, android.os.Bundle.EMPTY), android.os.Bundle.EMPTY)
+                        abLoop = abLoop.clear()
+                    }, enabled = abLoop.pointAMs != null) { Text("クリア") }
+                }
+                Text(abLoopLabel(abLoop), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            }
         }
         if (queueIndex >= 0 && queue.size > 1) Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -130,6 +188,19 @@ fun NowPlayingScreen(
             }
         }
     }
+}
+
+private fun nextRepeatMode(current: RepeatOption): RepeatOption = when (current) {
+    RepeatOption.OFF -> RepeatOption.ALL
+    RepeatOption.ALL -> RepeatOption.ONE
+    RepeatOption.ONE -> RepeatOption.OFF
+}
+
+private fun abLoopLabel(state: AbLoopState): String = when {
+    state.enabled -> "A-B ループ中: ${formatPlaybackTime(state.pointAMs!!)} – ${formatPlaybackTime(state.pointBMs!!)}"
+    state.isValid -> "範囲: ${formatPlaybackTime(state.pointAMs!!)} – ${formatPlaybackTime(state.pointBMs!!)}"
+    state.pointAMs != null -> "Aを設定済み。BはAより後の位置で設定してください。"
+    else -> "A地点とB地点を設定すると、この区間を繰り返せます。"
 }
 
 private fun visualizerLabel(mode: VisualizerMode): String = when (mode.id) {

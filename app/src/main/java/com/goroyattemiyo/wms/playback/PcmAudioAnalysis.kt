@@ -31,19 +31,24 @@ object PcmAudioAnalysisBus : AudioAnalysisDataSource {
 @UnstableApi
 internal class PcmAnalysisBufferSink : TeeAudioProcessor.AudioBufferSink {
     private var encoding: Int = C.ENCODING_INVALID
+    private var lastPublishedMs = 0L
 
     override fun flush(sampleRateHz: Int, channelCount: Int, encoding: Int) {
         this.encoding = encoding
+        lastPublishedMs = 0L
         PcmAudioAnalysisBus.clear()
     }
 
     override fun handleBuffer(buffer: ByteBuffer) {
+        val nowMs = System.nanoTime() / 1_000_000L
+        if (nowMs - lastPublishedMs < 50L) return
         val samples = when (encoding) {
             C.ENCODING_PCM_16BIT -> readPcm16(buffer)
             C.ENCODING_PCM_FLOAT -> readPcmFloat(buffer)
             else -> emptyList()
         }
         if (samples.isEmpty()) return
+        lastPublishedMs = nowMs
 
         val level = sqrt(samples.sumOf { (it * it).toDouble() } / samples.size)
             .toFloat()
@@ -52,6 +57,7 @@ internal class PcmAnalysisBufferSink : TeeAudioProcessor.AudioBufferSink {
             AudioAnalysisFrame(
                 normalizedLevel = (level * 2.2f).coerceIn(0f, 1f),
                 waveform = downsample(samples, 32) { it * 0.5f + 0.5f },
+                signedWaveform = downsample(samples, 32) { it },
                 spectrum = downsample(samples, 20) { abs(it) },
             ),
         )

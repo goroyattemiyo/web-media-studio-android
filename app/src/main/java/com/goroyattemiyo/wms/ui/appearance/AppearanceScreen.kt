@@ -20,6 +20,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -43,6 +44,8 @@ fun AppearanceScreen(
     onBackgroundSelected: (String) -> Unit,
     onVisualizerSelected: (String) -> Unit,
     onReducedMotionChanged: (Boolean) -> Unit,
+    onChooseBackgroundImage: () -> Unit,
+    onBackgroundBlurChanged: (Float) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -59,6 +62,13 @@ fun AppearanceScreen(
             TextButton(onClick = onBack) { Text("戻る") }
             Text("Appearance", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Spacer(Modifier.width(64.dp))
+        }
+        OutlinedButton(onClick = onChooseBackgroundImage, modifier = Modifier.fillMaxWidth()) {
+            Text(if (settings.backgroundImagePath == null) "端末から背景画像を選ぶ" else "背景画像を変更")
+        }
+        if (settings.backgroundImagePath != null) {
+            Text("背景のぼかし", fontWeight = FontWeight.Bold)
+            Slider(value = settings.backgroundBlur, onValueChange = onBackgroundBlurChanged, valueRange = 0f..24f)
         }
 
         Text("Skin", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -170,13 +180,4 @@ private fun SkinPreviewTile(
     }
 }
 
-private fun visualizerLabel(mode: VisualizerMode): String = when (mode.id) {
-    "rainbow-ring" -> "レインボーリング"
-    "oscilloscope" -> "オシロスコープ"
-    "spectrum-city" -> "スペクトラム"
-    "neon-tunnel" -> "ネオントンネル"
-    "kaleido" -> "カレイド"
-    "particles" -> "パーティクル"
-    "minimal" -> "ミニマル"
-    else -> mode.id.replaceFirstChar { it.uppercase() }
-}
+private fun visualizerLabel(mode: VisualizerMode): String = mode.displayName

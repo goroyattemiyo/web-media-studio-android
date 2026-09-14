@@ -56,7 +56,7 @@ class MainActivity : ComponentActivity() {
             val appearance by appearanceViewModel.settings.collectAsStateWithLifecycle(
                 initialValue = AppearanceSettings(),
             )
-            WmsTheme(appearance.skin, appearance.backgroundStyle) {
+            WmsTheme(appearance.skin, appearance.backgroundStyle, appearance.backgroundImagePath, appearance.backgroundBlur) {
                 WmsRoot(
                     acquisitionViewModel,
                     searchViewModel,
@@ -115,6 +115,9 @@ private fun WmsRoot(
     val playbackController = rememberPlaybackController()
     val documentPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         libraryViewModel.importUris(uris)
+    }
+    val backgroundImagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let(appearanceViewModel::importBackgroundImage)
     }
 
     BackHandler(enabled = appearanceOpen || nowPlayingOpen) {
@@ -179,6 +182,8 @@ private fun WmsRoot(
                         onBackgroundSelected = appearanceViewModel::selectBackground,
                         onVisualizerSelected = appearanceViewModel::selectVisualizer,
                         onReducedMotionChanged = appearanceViewModel::setReducedMotion,
+                        onChooseBackgroundImage = { backgroundImagePicker.launch(arrayOf("image/*")) },
+                        onBackgroundBlurChanged = appearanceViewModel::setBackgroundBlur,
                     )
                 } else if (nowPlayingOpen) {
                     NowPlayingScreen(

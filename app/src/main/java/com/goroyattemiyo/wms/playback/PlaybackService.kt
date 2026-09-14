@@ -2,16 +2,20 @@ package com.goroyattemiyo.wms.playback
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
 import com.goroyattemiyo.wms.MainActivity
 import com.goroyattemiyo.wms.WmsApplication
 import kotlinx.coroutines.CoroutineScope
@@ -20,6 +24,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import com.google.common.util.concurrent.Futures
 import org.json.JSONArray
 
 class PlaybackService : MediaLibraryService() {
@@ -27,6 +32,7 @@ class PlaybackService : MediaLibraryService() {
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var player: ExoPlayer
     private var librarySession: MediaLibrarySession? = null
+    private var abLoopState = AbLoopState()
 
     private val preferences by lazy { getSharedPreferences(PREFS_NAME, MODE_PRIVATE) }
     private val applicationRepository by lazy { (application as WmsApplication).mediaRepository }
@@ -36,6 +42,15 @@ class PlaybackService : MediaLibraryService() {
         override fun run() {
             persistPlaybackState()
             handler.postDelayed(this, POSITION_PERSIST_INTERVAL_MS)
+        }
+    }
+
+    private val abLoopTicker = object : Runnable {
+        override fun run() {
+            if (abLoopState.shouldLoopAt(player.currentPosition)) {
+                player.seekTo(abLoopState.pointAMs!!)
+            }
+            if (abLoopState.enabled) handler.postDelayed(this, AB_LOOP_INTERVAL_MS)
         }
     }
 
@@ -50,6 +65,18 @@ class PlaybackService : MediaLibraryService() {
 
         override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
             persistPlaybackState()
+        }
+
+        override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) {
+            persistPlayerOptions()
+        }
+
+        override fun onRepeatModeChanged(repeatMode: Int) {
+            persistPlayerOptions()
+        }
+
+        override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+            persistPlayerOptions()
         }
     }
 
@@ -68,6 +95,7 @@ class PlaybackService : MediaLibraryService() {
             addListener(playerListener)
         }
 
+        restorePlayerOptions()
         restorePlaybackState()
 
         val sessionActivity = PendingIntent.getActivity(
@@ -81,7 +109,45 @@ class PlaybackService : MediaLibraryService() {
         librarySession = MediaLibrarySession.Builder(
             this,
             player,
-            object : MediaLibrarySession.Callback {},
+            object : MediaLibrarySession.Callback {
+                override fun onConnect(
+                    session: MediaSession,
+                    controller: MediaSession.ControllerInfo,
+                ): MediaSession.ConnectionResult {
+                    val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS
+                        .buildUpon()
+                        .add(SessionCommand(PlaybackCommand.SET_AB_A, Bundle.EMPTY))
+                        .add(SessionCommand(PlaybackCommand.SET_AB_B, Bundle.EMPTY))
+                        .add(SessionCommand(PlaybackCommand.TOGGLE_AB, Bundle.EMPTY))
+                        .add(SessionCommand(PlaybackCommand.CLEAR_AB, Bundle.EMPTY))
+                        .build()
+                    return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                        .setAvailableSessionCommands(commands)
+                        .build()
+                }
+
+                override fun onCustomCommand(
+                    session: MediaSession,
+                    controller: MediaSession.ControllerInfo,
+                    customCommand: SessionCommand,
+                    args: Bundle,
+                ) = Futures.immediateFuture(
+                    SessionResult(
+                        when (customCommand.customAction) {
+                            PlaybackCommand.SET_AB_A -> { abLoopState = abLoopState.setA(player.currentPosition); SessionResult.RESULT_SUCCESS }
+                            PlaybackCommand.SET_AB_B -> { abLoopState = abLoopState.setB(player.currentPosition); SessionResult.RESULT_SUCCESS }
+                            PlaybackCommand.TOGGLE_AB -> {
+                                abLoopState = abLoopState.toggle()
+                                handler.removeCallbacks(abLoopTicker)
+                                if (abLoopState.enabled) handler.post(abLoopTicker)
+                                SessionResult.RESULT_SUCCESS
+                            }
+                            PlaybackCommand.CLEAR_AB -> { abLoopState = abLoopState.clear(); handler.removeCallbacks(abLoopTicker); SessionResult.RESULT_SUCCESS }
+                            else -> SessionResult.RESULT_ERROR_BAD_VALUE
+                        },
+                    ),
+                )
+            },
         ).setSessionActivity(sessionActivity)
             .build()
 
@@ -93,6 +159,7 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onDestroy() {
         handler.removeCallbacks(persistPosition)
+        handler.removeCallbacks(abLoopTicker)
         persistPlaybackState()
         librarySession?.release()
         librarySession = null
@@ -117,6 +184,21 @@ class PlaybackService : MediaLibraryService() {
         player.setMediaItems(items, startIndex, startPositionMs)
         player.prepare()
         player.playWhenReady = false
+    }
+
+    private fun restorePlayerOptions() {
+        player.playbackParameters = PlaybackParameters(PlaybackSpeed.normalize(preferences.getFloat(KEY_SPEED, 1f)))
+        player.repeatMode = RepeatOption.fromMedia3(preferences.getInt(KEY_REPEAT_MODE, Player.REPEAT_MODE_OFF)).media3Mode
+        player.shuffleModeEnabled = preferences.getBoolean(KEY_SHUFFLE, false)
+    }
+
+    private fun persistPlayerOptions() {
+        if (!::player.isInitialized) return
+        preferences.edit()
+            .putFloat(KEY_SPEED, PlaybackSpeed.normalize(player.playbackParameters.speed))
+            .putInt(KEY_REPEAT_MODE, RepeatOption.fromMedia3(player.repeatMode).media3Mode)
+            .putBoolean(KEY_SHUFFLE, player.shuffleModeEnabled)
+            .apply()
     }
 
     private fun persistPlaybackState() {
@@ -156,6 +238,10 @@ class PlaybackService : MediaLibraryService() {
         const val KEY_QUEUE_IDS = "queue_ids"
         const val KEY_QUEUE_INDEX = "queue_index"
         const val KEY_POSITION_MS = "position_ms"
+        const val KEY_SPEED = "speed"
+        const val KEY_REPEAT_MODE = "repeat_mode"
+        const val KEY_SHUFFLE = "shuffle"
         const val POSITION_PERSIST_INTERVAL_MS = 5_000L
+        const val AB_LOOP_INTERVAL_MS = 200L
     }
 }

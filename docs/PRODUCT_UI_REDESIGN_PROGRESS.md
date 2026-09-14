@@ -171,3 +171,29 @@ Target-device verification on Redmi 12 5G / Android 15:
 
 Next: Checkpoint 5 consolidates the separate Playlist destination into Library's
 All / Playlists experience, then changes primary navigation to Home / Library / Player.
+
+## Checkpoint 5 — Library / Playlist consolidation
+
+- [x] replaced the separate Playlist destination with `All` / `Playlists` inside Library
+- [x] retained playlist creation, rename, deletion, media add/remove, ordering, and
+  playlist queue playback through the existing PlaylistViewModel
+- [x] rebuilt All as a media collection with first-class artwork, title, source,
+  audio/video label, duration, file size, availability, and a safe delete action
+- [x] changed primary navigation from Search / Library / Playlist to Home / Library /
+  Player; Player opens Now Playing directly
+- [x] `testDebugUnitTest`
+- [x] `lintDebug`
+- [x] `assembleDebug`
+
+Target-device verification on Redmi 12 5G / Android 15:
+
+- [x] Library All displayed retained media and asynchronously resolved an Instagram
+  video frame and a local YouTube video frame in their media rows
+- [x] Library Playlists displayed the retained `GateA4__Mix` playlist under the new
+  internal tab
+- [x] selecting that playlist retained its item list plus Play, move-up, move-down,
+  and remove controls
+- [x] the bottom Player destination opened Now Playing
+
+Next: Checkpoint 6 redesigns full Player around the media visual surface, timeline,
+transport actions, and active queue while retaining Media3 as the sole playback owner.

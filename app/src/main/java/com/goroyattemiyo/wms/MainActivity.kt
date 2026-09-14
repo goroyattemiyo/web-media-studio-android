@@ -31,7 +31,6 @@ import com.goroyattemiyo.wms.ui.components.isDirectUrl
 import com.goroyattemiyo.wms.ui.home.SearchHome
 import com.goroyattemiyo.wms.ui.importer.ImportSheet
 import com.goroyattemiyo.wms.ui.library.LibraryScreen
-import com.goroyattemiyo.wms.ui.library.PlaylistScreen
 import com.goroyattemiyo.wms.ui.navigation.AppTab
 import com.goroyattemiyo.wms.ui.navigation.BottomNavigation
 import com.goroyattemiyo.wms.ui.playback.PlaybackRequest
@@ -103,7 +102,7 @@ private fun WmsRoot(
     var developerOpen by remember { mutableStateOf(false) }
     var nextPlaybackRequestId by remember { mutableIntStateOf(0) }
     var playbackRequest by remember { mutableStateOf<PlaybackRequest?>(null) }
-    var selectedTab by remember { mutableStateOf(AppTab.SEARCH) }
+    var selectedTab by remember { mutableStateOf(AppTab.HOME) }
     var nowPlayingOpen by remember { mutableStateOf(false) }
     var appearanceOpen by remember { mutableStateOf(false) }
     var importPlaylistId by remember { mutableStateOf<String?>(null) }
@@ -180,7 +179,7 @@ private fun WmsRoot(
                         controller = playbackController,
                     )
                 } else when (selectedTab) {
-                    AppTab.SEARCH -> SearchHome(
+                    AppTab.HOME -> SearchHome(
                         acquisitionState = acquisitionState,
                         searchState = searchState,
                         searchText = searchText,
@@ -233,26 +232,22 @@ private fun WmsRoot(
                         },
                         onDelete = libraryViewModel::delete,
                         onClearError = libraryViewModel::clearError,
-                    )
-                    AppTab.PLAYLIST -> PlaylistScreen(
                         playlists = playlists,
                         selectedPlaylistId = selectedPlaylistId,
-                        items = playlistItems,
-                        libraryMedia = libraryMedia,
-                        selectedMediaId = selectedMedia?.id,
-                        errorMessage = playlistError,
+                        playlistItems = playlistItems,
+                        playlistError = playlistError,
                         onSelectPlaylist = playlistViewModel::selectPlaylist,
                         onCreate = playlistViewModel::create,
                         onRename = playlistViewModel::rename,
-                        onDelete = playlistViewModel::delete,
+                        onDeletePlaylist = playlistViewModel::delete,
                         onAddMedia = playlistViewModel::addMedia,
                         onRemoveMedia = playlistViewModel::removeMedia,
                         onMoveMedia = playlistViewModel::moveMedia,
-                        onPlay = { media ->
+                        onPlayPlaylist = { media ->
                             libraryViewModel.select(media)
                             requestPlayback(media, playlistItems.map { it.media })
                         },
-                        onClearError = playlistViewModel::clearError,
+                        onClearPlaylistError = playlistViewModel::clearError,
                     )
                 }
             }
@@ -278,6 +273,7 @@ private fun WmsRoot(
                         nowPlayingOpen = false
                         selectedTab = it
                     },
+                    onOpenPlayer = { nowPlayingOpen = true },
                 )
             }
         }

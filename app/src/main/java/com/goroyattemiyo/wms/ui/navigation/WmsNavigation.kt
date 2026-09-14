@@ -13,15 +13,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 enum class AppTab {
-    SEARCH,
+    HOME,
     LIBRARY,
-    PLAYLIST,
 }
 
 @Composable
 fun BottomNavigation(
     selectedTab: AppTab,
     onSelect: (AppTab) -> Unit,
+    onOpenPlayer: () -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -32,10 +32,10 @@ fun BottomNavigation(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             TextButton(
-                onClick = { onSelect(AppTab.SEARCH) },
-                enabled = selectedTab != AppTab.SEARCH,
+                onClick = { onSelect(AppTab.HOME) },
+                enabled = selectedTab != AppTab.HOME,
             ) {
-                Text("検索")
+                Text("Home")
             }
             TextButton(
                 onClick = { onSelect(AppTab.LIBRARY) },
@@ -44,10 +44,9 @@ fun BottomNavigation(
                 Text("Library")
             }
             TextButton(
-                onClick = { onSelect(AppTab.PLAYLIST) },
-                enabled = selectedTab != AppTab.PLAYLIST,
+                onClick = onOpenPlayer,
             ) {
-                Text("Playlist")
+                Text("Player")
             }
         }
     }

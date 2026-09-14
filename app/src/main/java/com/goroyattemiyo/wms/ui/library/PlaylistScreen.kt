@@ -16,7 +16,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -35,7 +34,7 @@ import com.goroyattemiyo.wms.playlist.PlaylistSummary
 import java.io.File
 
 @Composable
-fun PlaylistScreen(
+fun PlaylistManagementContent(
     playlists: List<PlaylistSummary>,
     selectedPlaylistId: String?,
     items: List<PlaylistMediaItem>,
@@ -58,20 +57,19 @@ fun PlaylistScreen(
     val selectedPlaylist = playlists.firstOrNull { it.id == selectedPlaylistId }
     val mediaIds = items.mapTo(mutableSetOf()) { it.media.id }
 
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Playlist", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                Text("Playlists", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Button(onClick = { createDialogOpen = true }) { Text("新規作成") }
             }
 
@@ -200,7 +198,6 @@ fun PlaylistScreen(
                 }
             }
             Spacer(Modifier.height(8.dp))
-        }
     }
 
     if (createDialogOpen) {

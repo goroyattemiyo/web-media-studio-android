@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.goroyattemiyo.wms.appearance.AppearanceSettings
+import com.goroyattemiyo.wms.appearance.WmsBackgroundStyle
 import com.goroyattemiyo.wms.appearance.WmsSkin
 import com.goroyattemiyo.wms.appearance.WmsSkinCatalog
 import com.goroyattemiyo.wms.playback.VisualizerMode
@@ -39,6 +40,7 @@ fun AppearanceScreen(
     settings: AppearanceSettings,
     onBack: () -> Unit,
     onSkinSelected: (String) -> Unit,
+    onBackgroundSelected: (String) -> Unit,
     onVisualizerSelected: (String) -> Unit,
     onReducedMotionChanged: (Boolean) -> Unit,
 ) {
@@ -70,6 +72,24 @@ fun AppearanceScreen(
                 selected = skin.id == settings.skinId,
                 onClick = { onSkinSelected(skin.id) },
             )
+        }
+
+        Text("Background", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text(
+            "再生や取得処理を増やさない、静的な背景です。",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            WmsBackgroundStyle.entries.forEach { style ->
+                OutlinedButton(onClick = { onBackgroundSelected(style.id) }) {
+                    Text(if (style.id == settings.backgroundId) "✓ ${style.displayName}" else style.displayName)
+                }
+            }
         }
 
         Text("Player Visualizer", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)

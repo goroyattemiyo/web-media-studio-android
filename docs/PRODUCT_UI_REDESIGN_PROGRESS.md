@@ -197,3 +197,45 @@ Target-device verification on Redmi 12 5G / Android 15:
 
 Next: Checkpoint 6 redesigns full Player around the media visual surface, timeline,
 transport actions, and active queue while retaining Media3 as the sole playback owner.
+
+## Checkpoint 6 — full Player and product polish
+
+- [x] rebuilt Now Playing around the shared media visual surface, timeline, elapsed /
+  total time, Previous, Play/Pause, Next, and a queue-aware Up next section
+- [x] added an explicit Home action in Player and hid the Mini Player / bottom navigation
+  while full Player is open
+- [x] made non-emblem audio visualizers the primary media surface: artwork and the WMS
+  fallback are no longer permanently overlaid on them
+- [x] aligned native visualizer families with the Web/PWA reference: rainbow ring,
+  oscilloscope, spectrum bars, and kaleidoscope-style radial presentation
+- [x] expanded native skin treatment with retro monospace and warm serif typography,
+  plus style-specific geometry already provided by the theme shapes
+- [x] added OpenDocument local media intake; users can select an audio
+  or video file from device folders directly from Home, which is copied into WMS-managed
+  storage and added to Library with metadata
+- [x] removed the unused YouTube / device-search shortcut row in favour of the explicit
+  `端末から音声・動画を選ぶ` action
+- [x] added a persisted, skin-independent static background choice: Plain, Grid, Dots,
+  or Scanlines. The Canvas background is drawn once with the UI and performs no polling
+  or animation.
+- [x] replaced the placeholder Developer Tools card with on-screen diagnostic state:
+  engine readiness, yt-dlp version, supported intake routes, Library count, selected
+  media, active skin / visualizer / reduced-motion state, and app version. It reads
+  already-held UI state and performs no background measurement or monitoring.
+- [x] `testDebugUnitTest`
+- [x] `lintDebug`
+- [x] `assembleDebug`
+
+Target-device verification on Redmi 12 5G / Android 15:
+
+- [x] installed the debug APK over the retained app data and restarted successfully
+- [x] selected Grid under Appearance → Background; it immediately covered the Home
+  canvas behind cards and remained associated with the selected skin
+- [x] opened Developer Tools and confirmed actual values including `Engine: READY`,
+  yt-dlp `2026.08.19`, Library item count, selected local media, Pixel Arcade /
+  rainbow-ring appearance, and the debug app version
+- [x] Home continued to show the audio visualizer as the main visual rather than a WMS
+  icon overlaid on it
+
+Next: commit this verified checkpoint, then continue the remaining product polish items
+from `docs/CODEX_NEXT_TASK.md` without changing the A0–A8 playback/acquisition contract.

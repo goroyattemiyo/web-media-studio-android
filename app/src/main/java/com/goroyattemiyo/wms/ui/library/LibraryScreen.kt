@@ -67,7 +67,7 @@ fun LibraryScreen(
     onClearPlaylistError: () -> Unit,
 ) {
     var section by remember { mutableStateOf(LibrarySection.ALL) }
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+    Surface(modifier = Modifier.fillMaxSize(), color = androidx.compose.ui.graphics.Color.Transparent) {
         Column(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),

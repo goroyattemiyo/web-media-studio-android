@@ -22,6 +22,13 @@ enum class WmsSurfaceStyle {
     RETRO,
 }
 
+enum class WmsBackgroundStyle(val id: String, val displayName: String) {
+    PLAIN("plain", "プレーン"),
+    GRID("grid", "グリッド"),
+    DOTS("dots", "ドット"),
+    SCANLINES("scanlines", "走査線"),
+}
+
 data class WmsSkin(
     val id: String,
     val displayName: String,
@@ -88,12 +95,15 @@ object WmsSkinCatalog {
 
 data class AppearanceSettings(
     val skinId: String = WmsSkinCatalog.DEFAULT_ID,
+    val backgroundId: String = WmsBackgroundStyle.PLAIN.id,
     val visualizerId: String = VisualizerMode.EMBLEM.id,
     val reducedMotion: Boolean = false,
 ) {
     val skin: WmsSkin get() = WmsSkinCatalog.byId(skinId)
     val visualizer: VisualizerMode
         get() = VisualizerMode.entries.firstOrNull { it.id == visualizerId } ?: VisualizerMode.EMBLEM
+    val backgroundStyle: WmsBackgroundStyle
+        get() = WmsBackgroundStyle.entries.firstOrNull { it.id == backgroundId } ?: WmsBackgroundStyle.PLAIN
 }
 
 private val Context.appearanceDataStore by preferencesDataStore(name = "appearance")
@@ -106,6 +116,10 @@ class AppearanceRepository(private val context: Context) {
         .map { preferences ->
             AppearanceSettings(
                 skinId = WmsSkinCatalog.byId(preferences[SKIN_ID]).id,
+                backgroundId = WmsBackgroundStyle.entries
+                    .firstOrNull { it.id == preferences[BACKGROUND_ID] }
+                    ?.id
+                    ?: WmsBackgroundStyle.PLAIN.id,
                 visualizerId = VisualizerMode.entries
                     .firstOrNull { it.id == preferences[VISUALIZER_ID] }
                     ?.id
@@ -116,6 +130,12 @@ class AppearanceRepository(private val context: Context) {
 
     suspend fun selectSkin(id: String) {
         context.appearanceDataStore.edit { it[SKIN_ID] = WmsSkinCatalog.byId(id).id }
+    }
+
+    suspend fun selectBackground(id: String) {
+        val safeId = WmsBackgroundStyle.entries.firstOrNull { it.id == id }?.id
+            ?: WmsBackgroundStyle.PLAIN.id
+        context.appearanceDataStore.edit { it[BACKGROUND_ID] = safeId }
     }
 
     suspend fun selectVisualizer(id: String) {
@@ -129,6 +149,7 @@ class AppearanceRepository(private val context: Context) {
 
     private companion object {
         val SKIN_ID = stringPreferencesKey("skin_id")
+        val BACKGROUND_ID = stringPreferencesKey("background_id")
         val VISUALIZER_ID = stringPreferencesKey("visualizer_id")
         val REDUCED_MOTION = booleanPreferencesKey("reduced_motion")
     }
@@ -139,6 +160,7 @@ class AppearanceViewModel(application: Application) : AndroidViewModel(applicati
     val settings = repository.settings
 
     fun selectSkin(id: String) = viewModelScope.launch { repository.selectSkin(id) }
+    fun selectBackground(id: String) = viewModelScope.launch { repository.selectBackground(id) }
     fun selectVisualizer(id: String) = viewModelScope.launch { repository.selectVisualizer(id) }
     fun setReducedMotion(enabled: Boolean) = viewModelScope.launch { repository.setReducedMotion(enabled) }
 }

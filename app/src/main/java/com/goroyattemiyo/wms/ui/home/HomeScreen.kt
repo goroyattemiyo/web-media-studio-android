@@ -75,19 +75,23 @@ fun SearchHome(
     onOpenAppearance: () -> Unit,
     developerOpen: Boolean,
     recentMedia: List<MediaEntity>,
+    libraryCount: Int,
     onPlayRecent: (MediaEntity) -> Unit,
     currentMedia: MediaEntity?,
+    skinName: String,
+    appVersion: String,
     playbackController: MediaController?,
     visualizerMode: VisualizerMode,
     reducedMotion: Boolean,
     onOpenPlayer: () -> Unit,
+    onChooseDeviceMedia: () -> Unit,
 ) {
     val context = LocalContext.current
     var menuOpen by remember { mutableStateOf(false) }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background,
+        color = Color.Transparent,
     ) {
         Column(
             modifier = Modifier
@@ -197,11 +201,11 @@ fun SearchHome(
                 }
             }
 
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            OutlinedButton(
+                onClick = onChooseDeviceMedia,
+                modifier = Modifier.fillMaxWidth(),
             ) {
-                Button(onClick = { }) { Text("YouTube · 端末内検索") }
+                Text("端末から音声・動画を選ぶ")
             }
 
             searchState.errorMessage?.let { message ->
@@ -271,7 +275,15 @@ fun SearchHome(
             }
 
             if (developerOpen) {
-                DeveloperStatusCard(acquisitionState)
+                DeveloperStatusCard(
+                    state = acquisitionState,
+                    libraryCount = libraryCount,
+                    currentMedia = currentMedia,
+                    skinName = skinName,
+                    visualizerMode = visualizerMode,
+                    reducedMotion = reducedMotion,
+                    appVersion = appVersion,
+                )
             }
 
             Spacer(Modifier.height(8.dp))
@@ -391,13 +403,26 @@ private fun SearchThumbnail(url: String?, durationSeconds: Int?) {
 }
 
 @Composable
-private fun DeveloperStatusCard(state: GateA0UiState) {
+private fun DeveloperStatusCard(
+    state: GateA0UiState,
+    libraryCount: Int,
+    currentMedia: MediaEntity?,
+    skinName: String,
+    visualizerMode: VisualizerMode,
+    reducedMotion: Boolean,
+    appVersion: String,
+) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
-            Text("Developer status", fontWeight = FontWeight.Bold)
+            Text("Developer tools", fontWeight = FontWeight.Bold)
+            Text(
+                "表示中の状態だけをまとめた診断情報です。自動測定・常駐監視は行いません。",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
             Text(
                 "Engine: ${if (state.engineReady) "READY" else state.engineCode}",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -407,7 +432,27 @@ private fun DeveloperStatusCard(state: GateA0UiState) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                "検索Provider: YouTube / 端末内 yt-dlp",
+                "取得: YouTube 検索 / URL / 端末ファイル",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                "ライブラリ: ${libraryCount}件",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                "再生対象: ${currentMedia?.title ?: "未選択"}",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                "外観: $skinName / ${visualizerMode.id}${if (reducedMotion) " / モーション軽減" else ""}",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                "App: $appVersion",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
             )

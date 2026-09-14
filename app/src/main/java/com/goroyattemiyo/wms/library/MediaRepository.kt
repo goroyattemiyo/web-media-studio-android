@@ -2,9 +2,11 @@ package com.goroyattemiyo.wms.library
 
 import android.content.Context
 import android.media.MediaMetadataRetriever
+import android.net.Uri
 import android.os.Environment
 import com.goroyattemiyo.wms.acquisition.AcquisitionResult
 import java.io.File
+import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -116,6 +118,38 @@ class MediaRepository internal constructor(
             }
     }
 
+    suspend fun importExternal(context: Context, uri: Uri): MediaEntity = withContext(Dispatchers.IO) {
+        val extension = context.contentResolver.getType(uri)
+            ?.substringAfterLast('/', "")
+            ?.takeIf { it in SUPPORTED_EXTENSIONS }
+            ?: "mp3"
+        acquiredDirectory.mkdirs()
+        val destination = File(acquiredDirectory, "wms-${UUID.randomUUID()}.$extension")
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            destination.outputStream().use(input::copyTo)
+        } ?: error("選択したファイルを開けません")
+        require(destination.length() > 0L) { "選択したファイルが空です" }
+        val metadata = runCatching { metadataReader.read(destination) }
+            .getOrElse { LocalMediaMetadata(null, 0L, mimeTypeForExtension(extension)) }
+        val entity = MediaEntity(
+            id = destination.nameWithoutExtension,
+            title = metadata.title ?: destination.nameWithoutExtension,
+            provider = "端末から追加",
+            author = null,
+            originalUrl = "",
+            localPath = destination.absolutePath,
+            mimeType = metadata.mimeType,
+            mediaType = if (metadata.mimeType.startsWith("video/")) "VIDEO" else "AUDIO",
+            durationMs = metadata.durationMs,
+            fileSize = destination.length(),
+            artworkUrl = null,
+            createdAt = System.currentTimeMillis(),
+            lastPositionMs = 0L,
+        )
+        mediaDao.upsert(entity)
+        entity
+    }
+
     suspend fun delete(media: MediaEntity): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             val file = File(media.localPath)
@@ -145,10 +179,13 @@ class MediaRepository internal constructor(
     }
 
     companion object {
-        private val SUPPORTED_EXTENSIONS = setOf("mp3", "m4a", "mp4")
+        private val SUPPORTED_EXTENSIONS = setOf("mp3", "m4a", "mp4", "wav", "ogg", "opus", "aac")
 
         private fun mimeTypeForExtension(extension: String): String = when (extension.lowercase()) {
             "m4a" -> "audio/mp4"
+            "wav" -> "audio/wav"
+            "ogg", "opus" -> "audio/ogg"
+            "aac" -> "audio/aac"
             "mp4" -> "video/mp4"
             else -> "audio/mpeg"
         }

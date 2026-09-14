@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.goroyattemiyo.wms.playback.VisualizerMode
@@ -54,7 +56,7 @@ class MainActivity : ComponentActivity() {
             val appearance by appearanceViewModel.settings.collectAsStateWithLifecycle(
                 initialValue = AppearanceSettings(),
             )
-            WmsTheme(appearance.skin) {
+            WmsTheme(appearance.skin, appearance.backgroundStyle) {
                 WmsRoot(
                     acquisitionViewModel,
                     searchViewModel,
@@ -111,6 +113,9 @@ private fun WmsRoot(
     val selectedMedia = libraryMedia.firstOrNull { it.id == selectedMediaId }
         ?: libraryMedia.firstOrNull()
     val playbackController = rememberPlaybackController()
+    val documentPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let(libraryViewModel::importUri)
+    }
 
     BackHandler(enabled = appearanceOpen || nowPlayingOpen) {
         when {
@@ -153,7 +158,7 @@ private fun WmsRoot(
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background,
+        color = androidx.compose.ui.graphics.Color.Transparent,
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.weight(1f)) {
@@ -162,13 +167,19 @@ private fun WmsRoot(
                         settings = appearance,
                         onBack = { appearanceOpen = false },
                         onSkinSelected = appearanceViewModel::selectSkin,
+                        onBackgroundSelected = appearanceViewModel::selectBackground,
                         onVisualizerSelected = appearanceViewModel::selectVisualizer,
                         onReducedMotionChanged = appearanceViewModel::setReducedMotion,
                     )
                 } else if (nowPlayingOpen) {
                     NowPlayingScreen(
                         media = selectedMedia,
+                        queue = if (selectedPlaylistId != null) playlistItems.map { it.media } else listOfNotNull(selectedMedia),
                         onBack = { nowPlayingOpen = false },
+                        onOpenHome = {
+                            nowPlayingOpen = false
+                            selectedTab = AppTab.HOME
+                        },
                         visualizerMode = if (appearance.reducedMotion) {
                             VisualizerMode.MINIMAL
                         } else {
@@ -206,12 +217,15 @@ private fun WmsRoot(
                         onOpenAppearance = { appearanceOpen = true },
                         developerOpen = developerOpen,
                         recentMedia = libraryMedia.take(3),
+                        libraryCount = libraryMedia.size,
                         onPlayRecent = { media ->
                             playlistViewModel.selectPlaylist(null)
                             libraryViewModel.select(media)
                             requestPlayback(media, listOf(media))
                         },
                         currentMedia = selectedMedia,
+                        skinName = appearance.skin.displayName,
+                        appVersion = BuildConfig.VERSION_NAME,
                         playbackController = playbackController,
                         visualizerMode = if (appearance.reducedMotion) {
                             VisualizerMode.MINIMAL
@@ -220,6 +234,7 @@ private fun WmsRoot(
                         },
                         reducedMotion = appearance.reducedMotion,
                         onOpenPlayer = { nowPlayingOpen = true },
+                        onChooseDeviceMedia = { documentPicker.launch(arrayOf("audio/*", "video/*")) },
                     )
                     AppTab.LIBRARY -> LibraryScreen(
                         media = libraryMedia,
@@ -252,7 +267,7 @@ private fun WmsRoot(
                 }
             }
 
-            if (!appearanceOpen) {
+            if (!appearanceOpen && !nowPlayingOpen) {
                 selectedMedia?.let { media ->
                     SavedMiniPlayer(
                         controller = playbackController,

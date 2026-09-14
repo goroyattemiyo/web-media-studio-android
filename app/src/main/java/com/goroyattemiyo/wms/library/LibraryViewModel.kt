@@ -1,6 +1,7 @@
 package com.goroyattemiyo.wms.library
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.goroyattemiyo.wms.WmsApplication
@@ -60,6 +61,14 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     fun savePosition(mediaId: String, positionMs: Long) {
         viewModelScope.launch {
             runCatching { repository.updateLastPosition(mediaId, positionMs) }
+        }
+    }
+
+    fun importUri(uri: Uri) {
+        viewModelScope.launch {
+            runCatching { repository.importExternal(getApplication<Application>(), uri) }
+                .onSuccess { select(it); _errorMessage.value = null }
+                .onFailure { _errorMessage.value = it.message ?: "端末ファイルを追加できませんでした" }
         }
     }
 

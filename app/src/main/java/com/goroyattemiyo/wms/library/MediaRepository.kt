@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Environment
+import android.provider.OpenableColumns
 import com.goroyattemiyo.wms.acquisition.AcquisitionResult
 import java.io.File
 import java.util.UUID
@@ -119,9 +120,16 @@ class MediaRepository internal constructor(
     }
 
     suspend fun importExternal(context: Context, uri: Uri): MediaEntity = withContext(Dispatchers.IO) {
-        val extension = context.contentResolver.getType(uri)
-            ?.substringAfterLast('/', "")
+        val sourceName = sourceDisplayName(context, uri)
+        val sourceExtension = sourceName
+            ?.substringAfterLast('.', "")
+            ?.lowercase()
             ?.takeIf { it in SUPPORTED_EXTENSIONS }
+        val extension = sourceExtension
+            ?: context.contentResolver.getType(uri)
+                ?.substringAfterLast('/', "")
+                ?.lowercase()
+                ?.takeIf { it in SUPPORTED_EXTENSIONS }
             ?: "mp3"
         acquiredDirectory.mkdirs()
         val destination = File(acquiredDirectory, "wms-${UUID.randomUUID()}.$extension")
@@ -133,7 +141,14 @@ class MediaRepository internal constructor(
             .getOrElse { LocalMediaMetadata(null, 0L, mimeTypeForExtension(extension)) }
         val entity = MediaEntity(
             id = destination.nameWithoutExtension,
-            title = metadata.title ?: destination.nameWithoutExtension,
+            // A local import is selected by filename. Keep that name visible instead of
+            // silently substituting an embedded tag or our internal UUID destination.
+            title = sourceName
+                ?.substringBeforeLast('.', sourceName)
+                ?.trim()
+                ?.takeIf(String::isNotBlank)
+                ?: metadata.title
+                ?: destination.nameWithoutExtension,
             provider = "端末から追加",
             author = null,
             originalUrl = "",
@@ -177,6 +192,19 @@ class MediaRepository internal constructor(
             "WMS管理外のファイルは操作できません"
         }
     }
+
+    private fun sourceDisplayName(context: Context, uri: Uri): String? = runCatching {
+        context.contentResolver.query(
+            uri,
+            arrayOf(OpenableColumns.DISPLAY_NAME),
+            null,
+            null,
+            null,
+        )?.use { cursor ->
+            val column = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (column >= 0 && cursor.moveToFirst()) cursor.getString(column) else null
+        }
+    }.getOrNull()
 
     companion object {
         private val SUPPORTED_EXTENSIONS = setOf("mp3", "m4a", "mp4", "wav", "ogg", "opus", "aac")

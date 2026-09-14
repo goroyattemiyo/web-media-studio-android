@@ -1,5 +1,9 @@
 package com.goroyattemiyo.wms.ui.library
 
+import android.content.ClipData
+import android.content.Intent
+import android.widget.Toast
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +21,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -30,9 +36,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import com.goroyattemiyo.wms.library.MediaEntity
 import com.goroyattemiyo.wms.playlist.PlaylistMediaItem
 import com.goroyattemiyo.wms.playlist.PlaylistSummary
@@ -106,11 +114,13 @@ private fun AllMediaSection(
     onClearError: () -> Unit,
 ) {
     var pendingDelete by remember { mutableStateOf<MediaEntity?>(null) }
+    var actionMenuFor by remember { mutableStateOf<MediaEntity?>(null) }
+    val context = LocalContext.current
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Recently added", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text("すべてのメディア", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         errorMessage?.let { message ->
             Card(modifier = Modifier.fillMaxWidth()) {
                 Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -154,7 +164,23 @@ private fun AllMediaSection(
                             item.id == selectedMediaId -> Text("再生中", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
                         }
                     }
-                    TextButton(onClick = { pendingDelete = item }) { Text("削除") }
+                    Box {
+                        TextButton(onClick = { actionMenuFor = item }) { Text("⋮") }
+                        DropdownMenu(
+                            expanded = actionMenuFor?.id == item.id,
+                            onDismissRequest = { actionMenuFor = null },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("共有") },
+                                enabled = available,
+                                onClick = { actionMenuFor = null; shareMedia(context, item) },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("削除") },
+                                onClick = { actionMenuFor = null; pendingDelete = item },
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -167,5 +193,21 @@ private fun AllMediaSection(
             confirmButton = { Button(onClick = { pendingDelete = null; onDelete(item) }) { Text("削除") } },
             dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("戻る") } },
         )
+    }
+}
+
+private fun shareMedia(context: android.content.Context, media: MediaEntity) {
+    val file = File(media.localPath)
+    runCatching {
+        require(file.exists() && file.length() > 0L) { "共有するファイルが見つかりません" }
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.mediafiles", file)
+        val sendIntent = Intent(Intent.ACTION_SEND)
+            .setType(media.mimeType.ifBlank { "application/octet-stream" })
+            .putExtra(Intent.EXTRA_STREAM, uri)
+        sendIntent.clipData = ClipData.newRawUri(media.title, uri)
+        sendIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        context.startActivity(Intent.createChooser(sendIntent, "${media.title} を共有"))
+    }.onFailure {
+        Toast.makeText(context, it.message ?: "ファイルを共有できませんでした", Toast.LENGTH_SHORT).show()
     }
 }

@@ -1,8 +1,5 @@
 package com.goroyattemiyo.wms.ui.player
 
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,12 +9,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -33,16 +32,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
-import com.goroyattemiyo.wms.R
 import com.goroyattemiyo.wms.library.MediaEntity
 import com.goroyattemiyo.wms.playback.VisualizerMode
 import com.goroyattemiyo.wms.ui.components.formatPlaybackTime
@@ -53,7 +48,6 @@ fun NowPlayingScreen(
     media: MediaEntity?,
     queue: List<MediaEntity>,
     onBack: () -> Unit,
-    onOpenHome: () -> Unit,
     visualizerMode: VisualizerMode,
     reducedMotion: Boolean,
     onVisualizerSelected: (String) -> Unit,
@@ -66,6 +60,7 @@ fun NowPlayingScreen(
     var fraction by remember { mutableFloatStateOf(0f) }
     var previous by remember { mutableStateOf(false) }
     var next by remember { mutableStateOf(false) }
+    var visualizerMenuOpen by remember { mutableStateOf(false) }
     DisposableEffect(controller) {
         if (controller == null) return@DisposableEffect onDispose {}
         val listener = object : Player.Listener {
@@ -94,36 +89,56 @@ fun NowPlayingScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            TextButton(onClick = onBack) { Text("戻る") }
-            Text("Now Playing", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            TextButton(onClick = onOpenHome) { Text("Home") }
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onBack) { Text("‹") }
+            Text("Now Playing", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            if (media?.mediaType != "VIDEO") Box {
+                TextButton(onClick = { visualizerMenuOpen = true }, enabled = !reducedMotion) { Text("表示") }
+                DropdownMenu(expanded = visualizerMenuOpen, onDismissRequest = { visualizerMenuOpen = false }) {
+                    VisualizerMode.entries.forEach { mode ->
+                        DropdownMenuItem(
+                            text = { Text(if (mode == visualizerMode) "✓ ${visualizerLabel(mode)}" else visualizerLabel(mode)) },
+                            onClick = { onVisualizerSelected(mode.id); visualizerMenuOpen = false },
+                        )
+                    }
+                }
+            }
         }
-        Box(
-            modifier = Modifier.fillMaxWidth().height(if (media?.mediaType == "VIDEO") 245.dp else 280.dp)
-                .background(Brush.radialGradient(listOf(Color(0xAA57D8FF), Color(0x553B55FF), Color.Transparent)), RoundedCornerShape(28.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (media != null) MediaVisualSurface(media, controller, visualizerMode, reducedMotion, Modifier.fillMaxSize().clip(RoundedCornerShape(28.dp)))
-            else Image(painterResource(R.drawable.wms_emblem), "WMS")
+        if (media != null) {
+            MediaVisualSurface(
+                media, controller, visualizerMode, reducedMotion,
+                Modifier.fillMaxWidth().height(if (media.mediaType == "VIDEO") 245.dp else 280.dp).clip(RoundedCornerShape(28.dp)),
+            )
         }
-        Text(media?.title ?: "WMS Local Player", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Text(media?.author?.takeIf(String::isNotBlank) ?: media?.provider ?: "Local", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        if (media?.mediaType != "VIDEO") Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            VisualizerMode.entries.forEach { mode -> OutlinedButton(onClick = { onVisualizerSelected(mode.id) }, enabled = !reducedMotion) { Text(if (mode == visualizerMode) "✓ ${mode.id}" else mode.id) } }
-        }
+        Text(media?.title ?: "メディアを選択してください", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(media?.author?.takeIf(String::isNotBlank) ?: media?.provider.orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant)
         Slider(value = shownFraction, onValueChange = { seeking = true; fraction = it }, onValueChangeFinished = { controller?.seekTo((fraction * duration).toLong()); seeking = false }, enabled = controller != null && duration > 0L, modifier = Modifier.fillMaxWidth())
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(formatPlaybackTime(shownPosition)); Text(formatPlaybackTime(duration)) }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { controller?.seekToPreviousMediaItem() }, enabled = previous) { Text("⏮ 前へ") }
-            Button(onClick = { if (controller?.isPlaying == true) controller.pause() else { if (controller?.playbackState == Player.STATE_ENDED) controller.seekTo(0L); controller?.play() } }, enabled = controller != null) { Text(if (playing) "一時停止" else "再生") }
-            TextButton(onClick = { controller?.seekToNextMediaItem() }, enabled = next) { Text("次へ ⏭") }
+            TextButton(onClick = { controller?.seekToPreviousMediaItem() }, enabled = previous) { Text("⏮") }
+            Button(onClick = { if (controller?.isPlaying == true) controller.pause() else { if (controller?.playbackState == Player.STATE_ENDED) controller.seekTo(0L); controller?.play() } }, enabled = controller != null, shape = CircleShape) { Text(if (playing) "❚❚" else "▶", style = MaterialTheme.typography.headlineSmall) }
+            TextButton(onClick = { controller?.seekToNextMediaItem() }, enabled = next) { Text("⏭") }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+            TextButton(onClick = { controller?.seekTo(((controller?.currentPosition ?: 0L) - 10_000L).coerceAtLeast(0L)) }, enabled = controller != null) { Text("↶ 10秒") }
+            TextButton(onClick = { controller?.seekTo(((controller?.currentPosition ?: 0L) + 10_000L).coerceAtMost(duration)) }, enabled = controller != null && duration > 0L) { Text("10秒 ↷") }
         }
         if (queueIndex >= 0 && queue.size > 1) Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Up next", fontWeight = FontWeight.Bold)
+                Text("次に再生", fontWeight = FontWeight.Bold)
                 queue.drop(queueIndex + 1).take(2).forEach { Text(it.title, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
     }
+}
+
+private fun visualizerLabel(mode: VisualizerMode): String = when (mode.id) {
+    "rainbow-ring" -> "レインボーリング"
+    "oscilloscope" -> "オシロスコープ"
+    "spectrum-city" -> "スペクトラム"
+    "neon-tunnel" -> "ネオントンネル"
+    "kaleido" -> "カレイド"
+    "particles" -> "パーティクル"
+    "minimal" -> "ミニマル"
+    else -> mode.id.replaceFirstChar { it.uppercase() }
 }

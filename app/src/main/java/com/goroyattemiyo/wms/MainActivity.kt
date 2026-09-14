@@ -113,8 +113,8 @@ private fun WmsRoot(
     val selectedMedia = libraryMedia.firstOrNull { it.id == selectedMediaId }
         ?: libraryMedia.firstOrNull()
     val playbackController = rememberPlaybackController()
-    val documentPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let(libraryViewModel::importUri)
+    val documentPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        libraryViewModel.importUris(uris)
     }
 
     BackHandler(enabled = appearanceOpen || nowPlayingOpen) {
@@ -127,6 +127,15 @@ private fun WmsRoot(
     fun requestPlayback(media: MediaEntity, queue: List<MediaEntity>) {
         nextPlaybackRequestId += 1
         playbackRequest = PlaybackRequest(nextPlaybackRequestId, media.id, queue)
+    }
+
+    LaunchedEffect(Unit) {
+        libraryViewModel.importedMedia.collect { imported ->
+            if (imported.isNotEmpty()) {
+                playlistViewModel.selectPlaylist(null)
+                requestPlayback(imported.first(), imported)
+            }
+        }
     }
 
     LaunchedEffect(playlists, importPlaylistId) {
@@ -176,10 +185,6 @@ private fun WmsRoot(
                         media = selectedMedia,
                         queue = if (selectedPlaylistId != null) playlistItems.map { it.media } else listOfNotNull(selectedMedia),
                         onBack = { nowPlayingOpen = false },
-                        onOpenHome = {
-                            nowPlayingOpen = false
-                            selectedTab = AppTab.HOME
-                        },
                         visualizerMode = if (appearance.reducedMotion) {
                             VisualizerMode.MINIMAL
                         } else {

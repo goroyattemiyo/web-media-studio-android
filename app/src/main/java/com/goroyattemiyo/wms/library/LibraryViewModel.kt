@@ -7,8 +7,10 @@ import androidx.lifecycle.viewModelScope
 import com.goroyattemiyo.wms.WmsApplication
 import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -27,6 +29,10 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage = _errorMessage.asStateFlow()
+
+    private val _importedMedia = MutableSharedFlow<List<MediaEntity>>()
+    /** Completed device-file import batches. The UI uses this to start the exact new queue. */
+    val importedMedia = _importedMedia.asSharedFlow()
 
     init {
         viewModelScope.launch {
@@ -64,11 +70,23 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun importUri(uri: Uri) {
+    fun importUris(uris: List<Uri>) {
         viewModelScope.launch {
-            runCatching { repository.importExternal(getApplication<Application>(), uri) }
-                .onSuccess { select(it); _errorMessage.value = null }
-                .onFailure { _errorMessage.value = it.message ?: "端末ファイルを追加できませんでした" }
+            val imported = mutableListOf<MediaEntity>()
+            var firstFailure: Throwable? = null
+            uris.distinct().forEach { uri ->
+                runCatching { repository.importExternal(getApplication<Application>(), uri) }
+                    .onSuccess(imported::add)
+                    .onFailure { if (firstFailure == null) firstFailure = it }
+            }
+            if (imported.isNotEmpty()) {
+                // Keep the compact UI, selected row, and Media3 queue on the same item.
+                select(imported.first())
+                _errorMessage.value = if (firstFailure == null) null else "一部の端末ファイルを追加できませんでした"
+                _importedMedia.emit(imported)
+            } else {
+                _errorMessage.value = firstFailure?.message ?: "端末ファイルを追加できませんでした"
+            }
         }
     }
 

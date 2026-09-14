@@ -62,21 +62,24 @@ fun AppearanceScreen(
         }
 
         Text("Skin", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Text(
-            "Web/PWAと共通のIDを保ったネイティブテーマです。選択は端末に保存されます。",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        WmsSkinCatalog.skins.forEach { skin ->
-            SkinPreviewTile(
-                skin = skin,
-                selected = skin.id == settings.skinId,
-                onClick = { onSkinSelected(skin.id) },
-            )
+        Text("見た目を選べます。選択はこの端末に保存されます。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        WmsSkinCatalog.skins.chunked(2).forEach { skins ->
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                skins.forEach { skin ->
+                    SkinPreviewTile(
+                        skin = skin,
+                        selected = skin.id == settings.skinId,
+                        onClick = { onSkinSelected(skin.id) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (skins.size == 1) Spacer(Modifier.weight(1f))
+            }
         }
 
         Text("Background", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Text(
-            "再生や取得処理を増やさない、静的な背景です。",
+            "ホームやライブラリの背景パターンを選べます。",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Row(
@@ -93,19 +96,16 @@ fun AppearanceScreen(
         }
 
         Text("Player Visualizer", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            VisualizerMode.entries.forEach { mode ->
-                OutlinedButton(
-                    onClick = { onVisualizerSelected(mode.id) },
-                    enabled = !settings.reducedMotion,
-                ) {
-                    Text(if (mode.id == settings.visualizerId) "✓ ${mode.id}" else mode.id)
+        VisualizerMode.entries.chunked(2).forEach { modes ->
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                modes.forEach { mode ->
+                    OutlinedButton(
+                        onClick = { onVisualizerSelected(mode.id) },
+                        enabled = !settings.reducedMotion,
+                        modifier = Modifier.weight(1f),
+                    ) { Text(if (mode.id == settings.visualizerId) "✓ ${visualizerLabel(mode)}" else visualizerLabel(mode)) }
                 }
+                if (modes.size == 1) Spacer(Modifier.weight(1f))
             }
         }
 
@@ -117,7 +117,7 @@ fun AppearanceScreen(
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("モーションを軽減", fontWeight = FontWeight.Bold)
                     Text(
-                        "Now Playingを静的なminimal表示にします。",
+                        "動きの少ない表示にします。",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall,
                     )
@@ -134,8 +134,9 @@ private fun SkinPreviewTile(
     skin: WmsSkin,
     selected: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+    OutlinedButton(onClick = onClick, modifier = modifier) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -145,7 +146,7 @@ private fun SkinPreviewTile(
         ) {
             Box(
                 modifier = Modifier
-                    .size(54.dp)
+                .size(46.dp)
                     .background(Color(skin.background), RoundedCornerShape(14.dp))
                     .padding(7.dp),
                 contentAlignment = Alignment.Center,
@@ -164,13 +165,18 @@ private fun SkinPreviewTile(
                     if (selected) "✓ ${skin.displayName}" else skin.displayName,
                     fontWeight = FontWeight.Bold,
                 )
-                Text(
-                    skin.description,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                Text(skin.id, style = MaterialTheme.typography.labelSmall)
             }
         }
     }
+}
+
+private fun visualizerLabel(mode: VisualizerMode): String = when (mode.id) {
+    "rainbow-ring" -> "レインボーリング"
+    "oscilloscope" -> "オシロスコープ"
+    "spectrum-city" -> "スペクトラム"
+    "neon-tunnel" -> "ネオントンネル"
+    "kaleido" -> "カレイド"
+    "particles" -> "パーティクル"
+    "minimal" -> "ミニマル"
+    else -> mode.id.replaceFirstChar { it.uppercase() }
 }

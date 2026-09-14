@@ -50,7 +50,6 @@ fun ImportSheet(
     onDiagnostics: () -> Unit,
     onCloseAndPlay: () -> Unit,
 ) {
-    var showDeveloper by remember { mutableStateOf(false) }
     var showAdvanced by remember(state.url) { mutableStateOf(false) }
     var selectedPreset by remember(state.url) { mutableStateOf(AcquisitionPreset.MP3_192) }
 
@@ -92,26 +91,8 @@ fun ImportSheet(
             }
 
             Text("保存形式", fontWeight = FontWeight.Bold)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                FormatChoice(
-                    label = "Audio",
-                    detail = if (selectedPreset == AcquisitionPreset.M4A_192) "M4A" else "MP3 192",
-                    selected = selectedPreset.mediaType == "AUDIO",
-                    enabled = !state.acquiring,
-                    modifier = Modifier.weight(1f),
-                    onClick = { selectedPreset = AcquisitionPreset.MP3_192 },
-                )
-                FormatChoice(
-                    label = "Video",
-                    detail = "MP4",
-                    selected = selectedPreset == AcquisitionPreset.VIDEO_MP4,
-                    enabled = !state.acquiring,
-                    modifier = Modifier.weight(1f),
-                    onClick = { selectedPreset = AcquisitionPreset.VIDEO_MP4 },
-                )
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Text("標準: 音声 MP3 192 kbps", modifier = Modifier.padding(14.dp), color = MaterialTheme.colorScheme.primary)
             }
             TextButton(onClick = { showAdvanced = !showAdvanced }, enabled = !state.acquiring) {
                 Text(if (showAdvanced) "詳細オプションを閉じる" else "詳細オプション")
@@ -123,6 +104,17 @@ fun ImportSheet(
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Text("Audio container", fontWeight = FontWeight.Bold)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            FormatChoice("音声", "MP3 / M4A", selectedPreset.mediaType == "AUDIO", !state.acquiring, Modifier.weight(1f)) {
+                                selectedPreset = AcquisitionPreset.MP3_192
+                            }
+                            FormatChoice("動画", "MP4", selectedPreset == AcquisitionPreset.VIDEO_MP4, !state.acquiring, Modifier.weight(1f)) {
+                                selectedPreset = AcquisitionPreset.VIDEO_MP4
+                            }
+                        }
                         AcquisitionPreset.entries
                             .filter { it.mediaType == "AUDIO" }
                             .forEach { preset ->
@@ -244,46 +236,6 @@ fun ImportSheet(
                 }
             }
 
-            TextButton(onClick = { showDeveloper = !showDeveloper }) {
-                Text(if (showDeveloper) "Developer toolsを閉じる" else "Developer tools")
-            }
-
-            if (showDeveloper) {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Text("Acquisition Engine", fontWeight = FontWeight.Bold)
-                        Text("yt-dlp: ${state.ytdlpVersion ?: "確認中"}")
-                        OutlinedButton(
-                            onClick = onUpdateYoutubeDl,
-                            enabled = state.engineReady &&
-                                !state.updatingYtdlp &&
-                                !state.diagnosing &&
-                                !state.probing &&
-                                !state.acquiring,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(if (state.updatingYtdlp) "Updating…" else "Update yt-dlp stable")
-                        }
-                        OutlinedButton(
-                            onClick = onDiagnostics,
-                            enabled = state.engineReady &&
-                                !state.updatingYtdlp &&
-                                !state.diagnosing &&
-                                !state.probing &&
-                                !state.acquiring,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(if (state.diagnosing) "Diagnosing…" else "yt-dlp Diagnostics")
-                        }
-                        state.diagnosticLines.forEach { line ->
-                            Text(line, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                }
-            }
 
             Spacer(Modifier.height(20.dp))
         }

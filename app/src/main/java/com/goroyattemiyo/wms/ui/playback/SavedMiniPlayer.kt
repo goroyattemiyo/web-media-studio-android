@@ -9,12 +9,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -168,25 +167,25 @@ fun SavedMiniPlayer(
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(onClick = onOpenNowPlaying),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 MediaArtwork(
                     media = presentation,
                     contentDescription = presentation.title,
                     modifier = Modifier
-                        .size(62.dp)
-                        .clip(RoundedCornerShape(14.dp)),
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(12.dp)),
                 )
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalArrangement = Arrangement.spacedBy(1.dp),
                 ) {
                     Text(
                         text = presentation.title,
@@ -201,12 +200,24 @@ fun SavedMiniPlayer(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Text(
-                        statusText,
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
                 }
+                IconButton(
+                    onClick = {
+                        if (controller?.isPlaying == true) {
+                            controller.pause()
+                            lastPersistedPositionMs = controller.currentPosition
+                            onPositionChanged(controller.currentPosition)
+                        } else {
+                            if (controller?.playbackState == Player.STATE_ENDED) controller.seekTo(0L)
+                            controller?.play()
+                        }
+                    },
+                    enabled = controller != null && fileAvailable,
+                ) { Text(if (isPlaying) "❚❚" else "▶") }
+                IconButton(
+                    onClick = { controller?.seekToNextMediaItem() },
+                    enabled = hasNext,
+                ) { Text("⏭") }
             }
 
             Slider(
@@ -226,50 +237,6 @@ fun SavedMiniPlayer(
                 modifier = Modifier.fillMaxWidth(),
                 enabled = controller != null && fileAvailable && durationMs > 0L,
             )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    formatPlaybackTime(displayedPositionMs),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    formatPlaybackTime(durationMs),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TextButton(
-                    onClick = { controller?.seekToPreviousMediaItem() },
-                    enabled = hasPrevious,
-                ) { Text("⏮  前へ") }
-                Button(
-                    onClick = {
-                        if (controller?.isPlaying == true) {
-                            controller.pause()
-                            lastPersistedPositionMs = controller.currentPosition
-                            onPositionChanged(controller.currentPosition)
-                        } else {
-                            if (controller?.playbackState == Player.STATE_ENDED) controller.seekTo(0L)
-                            controller?.play()
-                        }
-                    },
-                    enabled = controller != null && fileAvailable,
-                ) {
-                    Text(if (isPlaying) "一時停止" else "再生")
-                }
-                TextButton(
-                    onClick = { controller?.seekToNextMediaItem() },
-                    enabled = hasNext,
-                ) { Text("次へ  ⏭") }
-            }
         }
     }
 }

@@ -239,3 +239,35 @@ Target-device verification on Redmi 12 5G / Android 15:
 
 Next: commit this verified checkpoint, then continue the remaining product polish items
 from `docs/CODEX_NEXT_TASK.md` without changing the A0–A8 playback/acquisition contract.
+
+## Checkpoint 7 — UI consistency audit
+
+- [x] replaced disabled Card/TextButton navigation with Material 3 selected navigation
+  items for Home, Library, and Player
+- [x] moved Home search / URL and local multi-file intake ahead of Current Media
+- [x] made Full Player media-first again; restored the A2 ±10-second seek actions and
+  moved visualizer selection to a compact secondary menu
+- [x] reduced Mini Player to artwork, title/provider, progress, Play/Pause, and Next
+- [x] renamed the Library collection to “すべてのメディア” and moved Share/Delete to
+  row overflow actions; WMS-managed files can be shared through Android's chooser
+- [x] converted Appearance to skin previews and user-facing visualizer labels while
+  keeping persisted IDs unchanged
+- [x] made MP3 192 the Import default, with container/video controls in 詳細オプション;
+  removed developer diagnostics from the normal import flow without removing rights
+  confirmation
+- [x] replaced Home's skin-breaking Neon literals with Material color tokens and fixed
+  the theme-level default content color so dark skins do not render default text black
+- [x] documented parity findings and deferred Player parity candidates in
+  `PRODUCT_UI_CONSISTENCY_AUDIT.md`
+
+Initial local verification before the final theme fix:
+
+- [x] `testDebugUnitTest`
+- [x] `lintDebug`
+- [x] `assembleDebug`
+- [x] final APK installed on Redmi 12 5G / Android 15; Midnight Neon/Grid Home,
+  compact Mini Player, selected navigation, and the dark-skin text correction inspected
+
+Next: Player parity pack decision, then final designer polish/regression including the
+new Library overflow, Import layout, and non-default skin sweep. This is a checkpoint,
+not Product UI Redesign FINAL PASS.

@@ -111,7 +111,7 @@ fun SearchHome(
                             .size(56.dp)
                             .background(
                                 brush = Brush.radialGradient(
-                                    colors = listOf(Color(0x332B8CFF), Color.Transparent),
+                                    colors = listOf(MaterialTheme.colorScheme.primary.copy(alpha = 0.20f), Color.Transparent),
                                 ),
                                 shape = RoundedCornerShape(18.dp),
                             )
@@ -152,16 +152,6 @@ fun SearchHome(
                         )
                     }
                 }
-            }
-
-            currentMedia?.let { media ->
-                CurrentMediaStage(
-                    media = media,
-                    controller = playbackController,
-                    visualizerMode = visualizerMode,
-                    reducedMotion = reducedMotion,
-                    onOpenPlayer = onOpenPlayer,
-                )
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -205,7 +195,17 @@ fun SearchHome(
                 onClick = onChooseDeviceMedia,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("端末から音声・動画を選ぶ")
+                    Text("端末から音声・動画を複数選ぶ")
+            }
+
+            currentMedia?.let { media ->
+                CurrentMediaStage(
+                    media = media,
+                    controller = playbackController,
+                    visualizerMode = visualizerMode,
+                    reducedMotion = reducedMotion,
+                    onOpenPlayer = onOpenPlayer,
+                )
             }
 
             searchState.errorMessage?.let { message ->
@@ -322,7 +322,7 @@ private fun SearchResultCard(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
                             item.provider.replaceFirstChar { it.uppercase() },
-                            color = Color(0xFF57D8FF),
+                            color = MaterialTheme.colorScheme.primary,
                             style = MaterialTheme.typography.labelMedium,
                         )
                         item.durationSeconds?.let {
@@ -373,7 +373,7 @@ private fun SearchThumbnail(url: String?, durationSeconds: Int?) {
             .size(width = 112.dp, height = 64.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(
-                Brush.linearGradient(listOf(Color(0xFF11263F), Color(0xFF251B42))),
+                Brush.linearGradient(listOf(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.surface)),
             ),
         contentAlignment = Alignment.Center,
     ) {
@@ -385,7 +385,7 @@ private fun SearchThumbnail(url: String?, durationSeconds: Int?) {
                 contentScale = ContentScale.Crop,
             )
         } else {
-            Text("▶", style = MaterialTheme.typography.headlineSmall, color = Color(0xFF57D8FF))
+            Text("▶", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
         }
         durationSeconds?.let {
             Text(
@@ -393,9 +393,9 @@ private fun SearchThumbnail(url: String?, durationSeconds: Int?) {
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(5.dp)
-                    .background(Color(0xCC000000), RoundedCornerShape(4.dp))
+                    .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.80f), RoundedCornerShape(4.dp))
                     .padding(horizontal = 5.dp, vertical = 2.dp),
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.labelSmall,
             )
         }

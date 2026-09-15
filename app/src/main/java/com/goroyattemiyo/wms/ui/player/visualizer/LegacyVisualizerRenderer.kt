@@ -27,12 +27,18 @@ internal fun LegacyVisualizerRenderer(
     val renderState = LightweightVisualizerRenderer.render(mode, frame.copy(phase = phase))
     Canvas(modifier) {
         when (mode) {
-            VisualizerMode.MINIMAL -> drawLine(
-                primary.copy(alpha = 0.7f),
-                Offset(size.width * 0.2f, center.y),
-                Offset(size.width * 0.8f, center.y),
-                2f,
-            )
+            VisualizerMode.MINIMAL -> {
+                val path = Path()
+                val amplitude = size.height * (0.018f + frame.normalizedLevel * 0.12f)
+                val wavelength = size.width * (0.42f - frame.high * 0.12f)
+                repeat(96) { index ->
+                    val progress = index / 95f
+                    val x = size.width * progress
+                    val y = center.y + sin(progress * size.width / wavelength * 2f * PI.toFloat() + phase * 2f * PI.toFloat()) * amplitude
+                    if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                }
+                drawPath(path, primary.copy(alpha = 0.42f + frame.normalizedLevel * 0.5f), style = Stroke(1.2f + frame.normalizedLevel * 2.6f))
+            }
             VisualizerMode.RAINBOW_RING -> repeat(9) { index ->
                 val radius = size.minDimension * (0.08f + index * 0.055f + renderState.emphasis * 0.02f)
                 drawCircle(
@@ -44,13 +50,14 @@ internal fun LegacyVisualizerRenderer(
             VisualizerMode.SPECTRUM_CITY -> renderState.values.forEachIndexed { index, value ->
                 val width = size.width / (renderState.values.size * 1.25f)
                 val left = index * size.width / renderState.values.size
-                val height = value.coerceAtLeast(0.08f) * size.height * 0.68f
+                val idle = 0.055f + 0.018f * sin(phase * 2f * PI.toFloat() + index * 0.7f)
+                val height = (idle + value * 0.76f) * size.height
                 drawRect(
-                    color = primary.copy(alpha = 0.35f + value * 0.65f),
+                    color = primary.copy(alpha = 0.38f + value * 0.62f),
                     topLeft = Offset(left, size.height - height),
                     size = Size(width, height),
                 )
-                drawLine(secondary, Offset(left, size.height - height), Offset(left + width, size.height - height), 2f)
+                drawLine(secondary.copy(alpha = 0.65f + value * 0.35f), Offset(left, size.height - height), Offset(left + width, size.height - height), 2f + value * 2f)
             }
             VisualizerMode.KALEIDO -> {
                 val path = Path()
@@ -66,8 +73,20 @@ internal fun LegacyVisualizerRenderer(
                 drawPath(path, secondary.copy(alpha = 0.8f), style = Stroke(2f))
             }
             VisualizerMode.EMBLEM -> {
-                drawCircle(primary.copy(alpha = 0.5f), size.minDimension * (0.25f + renderState.emphasis * 0.12f), style = Stroke(4f))
-                drawCircle(secondary.copy(alpha = 0.35f), size.minDimension * (0.34f + renderState.emphasis * 0.08f), style = Stroke(1f))
+                val pulse = frame.onsetStrength
+                val baseRadius = size.minDimension * (0.20f + frame.bass * 0.19f + 0.015f * sin(phase * 2f * PI.toFloat()))
+                drawCircle(primary.copy(alpha = 0.28f + frame.high * 0.55f), baseRadius + size.minDimension * 0.05f, style = Stroke(8f + frame.high * 13f))
+                val ring = Path()
+                repeat(65) { index ->
+                    val angle = index * 2f * PI.toFloat() / 64f
+                    val deformation = sin(angle * 5f + phase * 2f * PI.toFloat()) * frame.mid * size.minDimension * 0.06f
+                    val point = Offset(center.x + cos(angle) * (baseRadius + deformation), center.y + sin(angle) * (baseRadius + deformation))
+                    if (index == 0) ring.moveTo(point.x, point.y) else ring.lineTo(point.x, point.y)
+                }
+                drawPath(ring, secondary.copy(alpha = 0.62f + frame.mid * 0.35f), style = Stroke(2f + frame.high * 3f))
+                if (pulse > 0.02f) {
+                    drawCircle(secondary.copy(alpha = pulse * 0.72f), baseRadius + size.minDimension * pulse * 0.32f, style = Stroke(2f + pulse * 6f))
+                }
             }
             else -> {
                 val radius = size.minDimension * 0.27f

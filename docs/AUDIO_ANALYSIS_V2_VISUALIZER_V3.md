@@ -177,3 +177,32 @@ mode. Product UI Redesign as a whole must not be called LOCAL PASS until its rem
 designer-polish and preservation checks pass.
 
 Product UI Redesign remains **IN PROGRESS**, not FINAL PASS.
+
+## Visual response calibration — 2026-09-15
+
+The temporary Redmi PCM diagnostic was enabled for a single retained local track and
+removed before this checkpoint. The runtime path continued to publish at its 25 Hz cap;
+the visual issue was the linear renderer mapping, not a redesign of FFT extraction.
+
+- Renderer inputs now use magnitude `dB/log -> -48 dB noise floor -> normalized -> 1.22x
+  soft-bounded gain -> gamma 0.58`; overall RMS uses a -54 dB floor and 1.12x gain.
+  This keeps silence dark, makes quiet material visible, and soft-limits loud masters.
+- Flux/onset remain transition-derived from raw analysis, then use a -0.012 floor,
+  bounded 2.4x response, and square-root curve for visible but non-continuous pulses.
+- Spectrum City now has moving low-level skyline motion, log-normalized FFT building
+  heights, and brighter/thicker rooftops; low/mid/high bins remain spatially distinct.
+- Glyph Rain and Flow Field retain their independent 30 Hz motion loops. Their baseline
+  speed, trails, and opacity are visible without signal; bass, mid/high, centroid, and
+  onset modulate rather than gate movement.
+- Emblem Reactor now maps bass to radius, mid to ring deformation, high to glow, and
+  onset to a shockwave. Minimal remains restrained but adds a phase-driven line whose
+  amplitude, brightness, and width follow normalized level/high.
+- Spectrogram Waterfall continues to append every non-empty 25 Hz FFT frame and scroll
+  history regardless of row energy; zero-energy rows are retained rather than freezing
+  history.
+
+Redmi 12 5G / Android 15 smoke: the retained local track was replayed after installation;
+Spectrum City showed visible normalized building variation and Glyph Rain showed
+continuous glyph motion. Final artifact installation, all six renderer checks, reduced
+motion, pause/resume, mode switching, screen-off playback, and notification/media-key
+smoke remain the final verification pass for this calibration checkpoint.

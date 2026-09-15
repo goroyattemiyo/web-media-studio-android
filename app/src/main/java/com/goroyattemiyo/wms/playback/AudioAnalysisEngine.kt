@@ -126,18 +126,18 @@ internal class AudioAnalysisEngine(
         return AudioAnalysisFrame(
             rms = smoothedRms,
             peak = smoothedPeak,
-            normalizedLevel = (smoothedRms * 2.2f).coerceIn(0f, 1f),
+            normalizedLevel = VisualNormalization.level(smoothedRms),
             waveform = leftWaveform,
             leftWaveform = leftWaveform,
             rightWaveform = right?.let { downsample(it, WAVEFORM_POINTS) } ?: FloatArray(0),
-            fftBins = smoothedBins.copyOf(),
-            bass = (smoothedBass * BAND_GAIN).coerceIn(0f, 1f),
-            lowMid = (smoothedLowMid * BAND_GAIN).coerceIn(0f, 1f),
-            mid = (smoothedMid * BAND_GAIN).coerceIn(0f, 1f),
-            high = (smoothedHigh * BAND_GAIN).coerceIn(0f, 1f),
+            fftBins = FloatArray(binCount) { VisualNormalization.magnitude(smoothedBins[it]) },
+            bass = VisualNormalization.magnitude(smoothedBass),
+            lowMid = VisualNormalization.magnitude(smoothedLowMid),
+            mid = VisualNormalization.magnitude(smoothedMid),
+            high = VisualNormalization.magnitude(smoothedHigh),
             spectralCentroid = spectralCentroid(sampleRateHz),
-            spectralFlux = spectralFlux.coerceIn(0f, 1f),
-            onsetStrength = onsetStrength,
+            spectralFlux = VisualNormalization.transient(spectralFlux),
+            onsetStrength = VisualNormalization.transient(onsetStrength),
             phase = (animationSeconds % 1.0).toFloat(),
             animationTimeSeconds = animationSeconds.toFloat(),
             sampleRateHz = sampleRateHz,
@@ -213,7 +213,6 @@ internal class AudioAnalysisEngine(
         private const val MIN_FREQUENCY_HZ = 20f
         private const val ATTACK = 0.72f
         private const val RELEASE = 0.16f
-        private const val BAND_GAIN = 1.45f
         private const val SILENCE_EPSILON = 1e-12
     }
 }

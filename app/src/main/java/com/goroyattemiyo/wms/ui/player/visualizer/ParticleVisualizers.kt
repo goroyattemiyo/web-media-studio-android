@@ -57,10 +57,10 @@ internal fun FlowFieldRenderer(
                 val band = frame.fftBins.getOrElse(index % frame.fftBins.size.coerceAtLeast(1)) { 0f }
                 drawLine(
                     color = lerpColor(primary, secondary, index.toFloat() / state.count)
-                        .copy(alpha = 0.2f + frame.high * 0.45f + band * 0.25f),
+                        .copy(alpha = 0.3f + frame.high * 0.45f + band * 0.2f),
                     start = Offset(oldX, oldY),
                     end = Offset(x, y),
-                    strokeWidth = 1f + frame.bass * 2.4f,
+                    strokeWidth = 1.2f + frame.bass * 3.2f,
                 )
             }
         }
@@ -83,11 +83,11 @@ private class FlowFieldState(val count: Int) {
             val curl = sin(y[index] * 9f + time * (0.7f + centroid)) +
                 cos(x[index] * 11f - time * (0.5f + frame.mid))
             val angle = curl * PI.toFloat() + frame.mid * 2.4f
-            var velocity = 0.035f + frame.bass * 0.12f + frame.high * 0.035f
-            if (frame.onsetStrength > 0.08f) velocity += frame.onsetStrength * 0.18f
+            var velocity = 0.13f + frame.bass * 0.34f + frame.high * 0.08f
+            if (frame.onsetStrength > 0.04f) velocity += frame.onsetStrength * 0.28f
             var dx = cos(angle) * velocity * deltaSeconds
             var dy = sin(angle) * velocity * deltaSeconds
-            if (frame.onsetStrength > 0.08f) {
+            if (frame.onsetStrength > 0.04f) {
                 val centerX = x[index] - 0.5f
                 val centerY = y[index] - 0.5f
                 dx += centerX * frame.onsetStrength * deltaSeconds * 0.3f
@@ -133,7 +133,7 @@ internal fun GlyphRainRenderer(
     Canvas(modifier) {
         drawTick
         val nativeCanvas = drawContext.canvas.nativeCanvas
-        val activeTrail = (3 + frame.mid * 7f).toInt().coerceIn(3, 10)
+        val activeTrail = (4 + frame.mid * 10f).toInt().coerceIn(4, 14)
         val cellWidth = size.width / state.count
         paint.textSize = (cellWidth * (0.65f + frame.high * 0.18f)).coerceAtLeast(12f)
         repeat(state.count) { column ->
@@ -141,7 +141,7 @@ internal fun GlyphRainRenderer(
                 val y = (state.y[column] - trail * 0.065f).let(::wrap) * size.height
                 val glyphIndex = (state.glyph[column] + trail + (frame.high * 4f).toInt()) % GLYPHS.size
                 val color = lerpColor(primary, secondary, column.toFloat() / state.count)
-                paint.color = color.copy(alpha = ((activeTrail - trail).toFloat() / activeTrail) * (0.25f + frame.high * 0.7f)).toArgb()
+                paint.color = color.copy(alpha = ((activeTrail - trail).toFloat() / activeTrail) * (0.42f + frame.high * 0.58f)).toArgb()
                 nativeCanvas.drawText(GLYPHS[glyphIndex], (column + 0.5f) * cellWidth, y, paint)
             }
         }
@@ -162,10 +162,10 @@ private class GlyphRainState(val count: Int) {
     private var mutationAccumulator = 0f
 
     fun advance(frame: AudioAnalysisFrame, deltaSeconds: Float) {
-        mutationAccumulator += deltaSeconds * (1f + frame.high * 10f)
+        mutationAccumulator += deltaSeconds * (1.4f + frame.high * 12f)
         repeat(count) { index ->
-            y[index] = wrap(y[index] + deltaSeconds * speedBias[index] * (0.14f + frame.bass * 0.42f))
-            if (mutationAccumulator >= 1f || frame.onsetStrength > 0.45f) {
+            y[index] = wrap(y[index] + deltaSeconds * speedBias[index] * (0.28f + frame.bass * 0.72f))
+            if (mutationAccumulator >= 1f || frame.onsetStrength > 0.3f) {
                 glyph[index] = (glyph[index] + 1 + index % 3) % GLYPHS.size
             }
         }

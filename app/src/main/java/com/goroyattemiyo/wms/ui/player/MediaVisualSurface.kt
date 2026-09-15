@@ -111,6 +111,9 @@ private val PHASE_DRIVEN_RENDERERS = setOf(
     VisualizerRendererType.LIQUID_METABALLS,
     VisualizerRendererType.VORONOI_SHARDS,
     VisualizerRendererType.HYPER_TUNNEL,
+    VisualizerRendererType.SPECTRUM_CITY,
+    VisualizerRendererType.EMBLEM_REACTOR,
+    VisualizerRendererType.MINIMAL,
     VisualizerRendererType.STRANGE_ATTRACTOR,
 )
 private const val PHASE_DURATION_NANOS = 12_000_000_000L

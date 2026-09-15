@@ -4,29 +4,31 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.goroyattemiyo.wms.playback.VisualizerMode
+import androidx.media3.common.Player
 import com.goroyattemiyo.wms.appearance.AppearanceSettings
 import com.goroyattemiyo.wms.appearance.AppearanceViewModel
 import com.goroyattemiyo.wms.library.LibraryViewModel
 import com.goroyattemiyo.wms.library.MediaEntity
+import com.goroyattemiyo.wms.playback.VisualizerMode
+import com.goroyattemiyo.wms.playback.toPlaybackMediaItem
 import com.goroyattemiyo.wms.playlist.PlaylistViewModel
 import com.goroyattemiyo.wms.ui.appearance.AppearanceScreen
 import com.goroyattemiyo.wms.ui.components.isDirectUrl
@@ -81,6 +83,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
 @Composable
 private fun WmsRoot(
     acquisitionViewModel: GateA0ViewModel,
@@ -104,8 +107,9 @@ private fun WmsRoot(
     var developerOpen by remember { mutableStateOf(false) }
     var nextPlaybackRequestId by remember { mutableIntStateOf(0) }
     var playbackRequest by remember { mutableStateOf<PlaybackRequest?>(null) }
+    var playbackQueue by remember { mutableStateOf<List<MediaEntity>>(emptyList()) }
     var selectedTab by remember { mutableStateOf(AppTab.HOME) }
-    var nowPlayingOpen by remember { mutableStateOf(false) }
+    var lastContentTab by remember { mutableStateOf(AppTab.HOME) }
     var appearanceOpen by remember { mutableStateOf(false) }
     var importPlaylistId by remember { mutableStateOf<String?>(null) }
     var initializedImportUrl by remember { mutableStateOf<String?>(null) }
@@ -120,16 +124,69 @@ private fun WmsRoot(
         uri?.let(appearanceViewModel::importBackgroundImage)
     }
 
-    BackHandler(enabled = appearanceOpen || nowPlayingOpen) {
-        when {
-            appearanceOpen -> appearanceOpen = false
-            nowPlayingOpen -> nowPlayingOpen = false
+    fun requestPlayback(media: MediaEntity, queue: List<MediaEntity>) {
+        nextPlaybackRequestId += 1
+        playbackQueue = queue
+        playbackRequest = PlaybackRequest(nextPlaybackRequestId, media.id, queue)
+    }
+
+    fun navigateTo(tab: AppTab) {
+        when (tab) {
+            AppTab.PLAYER -> {
+                if (selectedTab != AppTab.PLAYER) {
+                    lastContentTab = selectedTab
+                }
+                selectedTab = AppTab.PLAYER
+            }
+            AppTab.HOME, AppTab.LIBRARY -> {
+                lastContentTab = tab
+                selectedTab = tab
+            }
         }
     }
 
-    fun requestPlayback(media: MediaEntity, queue: List<MediaEntity>) {
-        nextPlaybackRequestId += 1
-        playbackRequest = PlaybackRequest(nextPlaybackRequestId, media.id, queue)
+    BackHandler(enabled = appearanceOpen || selectedTab == AppTab.PLAYER) {
+        if (appearanceOpen) {
+            appearanceOpen = false
+        } else {
+            selectedTab = lastContentTab
+        }
+    }
+
+    LaunchedEffect(playbackController, playbackRequest?.requestId) {
+        val controller = playbackController ?: return@LaunchedEffect
+        val request = playbackRequest ?: return@LaunchedEffect
+        val playableQueue = request.queue.filter { item ->
+            File(item.localPath).let { it.exists() && it.length() > 0L }
+        }
+        val startIndex = playableQueue.indexOfFirst { it.id == request.mediaId }
+        if (startIndex >= 0) {
+            val requestedMedia = playableQueue[startIndex]
+            playbackQueue = playableQueue
+            controller.setMediaItems(
+                playableQueue.map(MediaEntity::toPlaybackMediaItem),
+                startIndex,
+                requestedMedia.lastPositionMs.coerceAtLeast(0L),
+            )
+            controller.prepare()
+            controller.play()
+        }
+    }
+
+    DisposableEffect(playbackController, libraryMedia) {
+        val controller = playbackController ?: return@DisposableEffect onDispose {}
+        val listener = object : Player.Listener {
+            override fun onMediaItemTransition(item: androidx.media3.common.MediaItem?, reason: Int) {
+                val mediaId = item?.mediaId?.takeIf(String::isNotBlank) ?: return
+                libraryMedia.firstOrNull { it.id == mediaId }?.let(libraryViewModel::select)
+            }
+        }
+        controller.addListener(listener)
+        controller.currentMediaItem?.mediaId
+            ?.takeIf(String::isNotBlank)
+            ?.let { mediaId -> libraryMedia.firstOrNull { it.id == mediaId } }
+            ?.let(libraryViewModel::select)
+        onDispose { controller.removeListener(listener) }
     }
 
     LaunchedEffect(Unit) {
@@ -183,21 +240,8 @@ private fun WmsRoot(
                         onVisualizerSelected = appearanceViewModel::selectVisualizer,
                         onReducedMotionChanged = appearanceViewModel::setReducedMotion,
                         onChooseBackgroundImage = { backgroundImagePicker.launch(arrayOf("image/*")) },
+                        onClearBackgroundImage = appearanceViewModel::clearBackgroundImage,
                         onBackgroundBlurChanged = appearanceViewModel::setBackgroundBlur,
-                    )
-                } else if (nowPlayingOpen) {
-                    NowPlayingScreen(
-                        media = selectedMedia,
-                        queue = if (selectedPlaylistId != null) playlistItems.map { it.media } else listOfNotNull(selectedMedia),
-                        onBack = { nowPlayingOpen = false },
-                        visualizerMode = if (appearance.reducedMotion) {
-                            VisualizerMode.MINIMAL
-                        } else {
-                            appearance.visualizer
-                        },
-                        reducedMotion = appearance.reducedMotion,
-                        onVisualizerSelected = appearanceViewModel::selectVisualizer,
-                        controller = playbackController,
                     )
                 } else when (selectedTab) {
                     AppTab.HOME -> SearchHome(
@@ -231,7 +275,7 @@ private fun WmsRoot(
                         onPlayRecent = { media ->
                             playlistViewModel.selectPlaylist(null)
                             libraryViewModel.select(media)
-                            requestPlayback(media, listOf(media))
+                            requestPlayback(media, libraryMedia)
                         },
                         currentMedia = selectedMedia,
                         skinName = appearance.skin.displayName,
@@ -243,7 +287,7 @@ private fun WmsRoot(
                             appearance.visualizer
                         },
                         reducedMotion = appearance.reducedMotion,
-                        onOpenPlayer = { nowPlayingOpen = true },
+                        onOpenPlayer = { navigateTo(AppTab.PLAYER) },
                         onChooseDeviceMedia = { documentPicker.launch(arrayOf("audio/*", "video/*")) },
                     )
                     AppTab.LIBRARY -> LibraryScreen(
@@ -253,7 +297,7 @@ private fun WmsRoot(
                         onPlay = { media ->
                             playlistViewModel.selectPlaylist(null)
                             libraryViewModel.select(media)
-                            requestPlayback(media, listOf(media))
+                            requestPlayback(media, libraryMedia)
                         },
                         onDelete = libraryViewModel::delete,
                         onClearError = libraryViewModel::clearError,
@@ -274,31 +318,43 @@ private fun WmsRoot(
                         },
                         onClearPlaylistError = playlistViewModel::clearError,
                     )
+                    AppTab.PLAYER -> NowPlayingScreen(
+                        media = selectedMedia,
+                        queue = playbackQueue.ifEmpty {
+                            if (selectedPlaylistId != null) playlistItems.map { it.media } else libraryMedia
+                        },
+                        onBack = { selectedTab = lastContentTab },
+                        visualizerMode = if (appearance.reducedMotion) {
+                            VisualizerMode.MINIMAL
+                        } else {
+                            appearance.visualizer
+                        },
+                        reducedMotion = appearance.reducedMotion,
+                        onVisualizerSelected = appearanceViewModel::selectVisualizer,
+                        controller = playbackController,
+                    )
                 }
             }
 
-            if (!appearanceOpen && !nowPlayingOpen) {
-                selectedMedia?.let { media ->
-                    SavedMiniPlayer(
-                        controller = playbackController,
-                        media = media,
-                        playbackRequest = playbackRequest,
-                        onPositionChanged = { positionMs ->
-                            libraryViewModel.savePosition(media.id, positionMs)
-                        },
-                        onMediaTransition = { mediaId ->
-                            libraryMedia.firstOrNull { it.id == mediaId }?.let(libraryViewModel::select)
-                        },
-                        onOpenNowPlaying = { nowPlayingOpen = true },
-                    )
+            if (!appearanceOpen) {
+                if (selectedTab != AppTab.PLAYER) {
+                    selectedMedia?.let { media ->
+                        SavedMiniPlayer(
+                            controller = playbackController,
+                            media = media,
+                            onPositionChanged = { positionMs ->
+                                libraryViewModel.savePosition(media.id, positionMs)
+                            },
+                            onMediaTransition = { mediaId ->
+                                libraryMedia.firstOrNull { it.id == mediaId }?.let(libraryViewModel::select)
+                            },
+                            onOpenNowPlaying = { navigateTo(AppTab.PLAYER) },
+                        )
+                    }
                 }
                 BottomNavigation(
                     selectedTab = selectedTab,
-                    onSelect = {
-                        nowPlayingOpen = false
-                        selectedTab = it
-                    },
-                    onOpenPlayer = { nowPlayingOpen = true },
+                    onSelect = ::navigateTo,
                 )
             }
         }
@@ -323,7 +379,7 @@ private fun WmsRoot(
                         File(it.localPath).absolutePath == File(savedPath).absolutePath
                     }
                 } ?: selectedMedia
-                savedMedia?.let { requestPlayback(it, listOf(it)) }
+                savedMedia?.let { requestPlayback(it, libraryMedia.ifEmpty { listOf(it) }) }
             },
         )
     }

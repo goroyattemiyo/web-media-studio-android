@@ -35,6 +35,7 @@ import com.goroyattemiyo.wms.appearance.WmsBackgroundStyle
 import com.goroyattemiyo.wms.appearance.WmsSkin
 import com.goroyattemiyo.wms.appearance.WmsSkinCatalog
 import com.goroyattemiyo.wms.playback.VisualizerMode
+import com.goroyattemiyo.wms.ui.player.visualizer.VisualizerStaticPreview
 
 @Composable
 fun AppearanceScreen(
@@ -113,7 +114,21 @@ fun AppearanceScreen(
                         onClick = { onVisualizerSelected(mode.id) },
                         enabled = !settings.reducedMotion,
                         modifier = Modifier.weight(1f),
-                    ) { Text(if (mode.id == settings.visualizerId) "✓ ${visualizerLabel(mode)}" else visualizerLabel(mode)) }
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(7.dp),
+                        ) {
+                            VisualizerStaticPreview(
+                                mode = mode,
+                                primary = MaterialTheme.colorScheme.primary,
+                                secondary = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.fillMaxWidth().height(58.dp),
+                            )
+                            Text(if (mode.id == settings.visualizerId) "✓ ${visualizerLabel(mode)}" else visualizerLabel(mode))
+                        }
+                    }
                 }
                 if (modes.size == 1) Spacer(Modifier.weight(1f))
             }

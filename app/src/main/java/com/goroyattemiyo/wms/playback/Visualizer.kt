@@ -5,24 +5,48 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sin
 
-enum class VisualizerMode(val id: String, val displayName: String) {
-    RAINBOW_RING("rainbow-ring", "ハイパートンネル"),
-    OSCILLOSCOPE("oscilloscope", "フォスファー・リサージュ"),
-    SPECTRUM_CITY("spectrum-city", "スペクトラムシティ"),
-    NEON_TUNNEL("neon-tunnel", "グリフレイン"),
-    KALEIDO("kaleido", "ストレンジアトラクター"),
-    PARTICLES("particles", "ボロノイ・シャーズ"),
-    EMBLEM("emblem", "エンブレムリアクター"),
-    PULSE("pulse", "リキッドメタボール"),
-    ORBIT("orbit", "フローフィールド"),
-    BARS("bars", "ワイヤーフレーム地形"),
-    WAVE("wave", "スペクトログラム滝"),
-    MINIMAL("minimal", "ミニマル"),
+enum class VisualizerRendererType {
+    HYPER_TUNNEL,
+    PHOSPHOR_LISSAJOUS,
+    SPECTRUM_CITY,
+    GLYPH_RAIN,
+    STRANGE_ATTRACTOR,
+    VORONOI_SHARDS,
+    EMBLEM_REACTOR,
+    LIQUID_METABALLS,
+    FLOW_FIELD,
+    WIREFRAME_TERRAIN,
+    SPECTROGRAM_WATERFALL,
+    MINIMAL,
+}
+
+enum class VisualizerImplementationStatus { V3_IMPLEMENTED, V2_RETAINED }
+
+enum class VisualizerMode(
+    val persistedId: String,
+    val displayName: String,
+    val rendererType: VisualizerRendererType,
+    val implementationStatus: VisualizerImplementationStatus,
+) {
+    RAINBOW_RING("rainbow-ring", "ハイパートンネル", VisualizerRendererType.HYPER_TUNNEL, VisualizerImplementationStatus.V2_RETAINED),
+    OSCILLOSCOPE("oscilloscope", "フォスファー・リサージュ", VisualizerRendererType.PHOSPHOR_LISSAJOUS, VisualizerImplementationStatus.V3_IMPLEMENTED),
+    SPECTRUM_CITY("spectrum-city", "スペクトラムシティ", VisualizerRendererType.SPECTRUM_CITY, VisualizerImplementationStatus.V2_RETAINED),
+    NEON_TUNNEL("neon-tunnel", "グリフレイン", VisualizerRendererType.GLYPH_RAIN, VisualizerImplementationStatus.V3_IMPLEMENTED),
+    KALEIDO("kaleido", "ストレンジアトラクター", VisualizerRendererType.STRANGE_ATTRACTOR, VisualizerImplementationStatus.V2_RETAINED),
+    PARTICLES("particles", "ボロノイ・シャーズ", VisualizerRendererType.VORONOI_SHARDS, VisualizerImplementationStatus.V3_IMPLEMENTED),
+    EMBLEM("emblem", "エンブレムリアクター", VisualizerRendererType.EMBLEM_REACTOR, VisualizerImplementationStatus.V2_RETAINED),
+    PULSE("pulse", "リキッドメタボール", VisualizerRendererType.LIQUID_METABALLS, VisualizerImplementationStatus.V3_IMPLEMENTED),
+    ORBIT("orbit", "フローフィールド", VisualizerRendererType.FLOW_FIELD, VisualizerImplementationStatus.V3_IMPLEMENTED),
+    BARS("bars", "ワイヤーフレーム地形", VisualizerRendererType.WIREFRAME_TERRAIN, VisualizerImplementationStatus.V3_IMPLEMENTED),
+    WAVE("wave", "スペクトログラム滝", VisualizerRendererType.SPECTROGRAM_WATERFALL, VisualizerImplementationStatus.V3_IMPLEMENTED),
+    MINIMAL("minimal", "ミニマル", VisualizerRendererType.MINIMAL, VisualizerImplementationStatus.V2_RETAINED),
     ;
+
+    val id: String get() = persistedId
 
     companion object {
         /** Existing persisted IDs remain valid; no DataStore migration is needed. */
-        fun fromPersistedId(id: String?): VisualizerMode = entries.firstOrNull { it.id == id } ?: EMBLEM
+        fun fromPersistedId(id: String?): VisualizerMode = entries.firstOrNull { it.persistedId == id } ?: EMBLEM
     }
 }
 

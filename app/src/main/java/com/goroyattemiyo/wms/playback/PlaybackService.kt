@@ -61,6 +61,7 @@ class PlaybackService : MediaLibraryService() {
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            if (!isPlaying) PcmAudioAnalysisBus.clear()
             persistPlaybackState()
         }
 

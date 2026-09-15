@@ -1,6 +1,6 @@
 # Current Implementation
 
-Last updated: 2026-09-13 JST
+Last updated: 2026-09-15 JST
 
 ## Repository state
 
@@ -8,9 +8,33 @@ Repository: `goroyattemiyo/web-media-studio-android`
 
 Current active branch:
 
-`feat/gate-a8-development-distribution`
+`plan/product-ui-redesign`
 
-Gate A8 is LOCAL PASS on its feature branch. No GitHub Actions run, Release creation, or merge to `main` was performed.
+Gate A8 remains LOCAL PASS at the branch base. Product UI Redesign is in progress on top
+of that verified baseline. No GitHub Actions run, Release creation, or merge to `main`
+was performed.
+
+## Product UI Redesign — current checkpoint
+
+Completed checkpoints through the verified Visualizer Diversity V2 work are recorded in
+`docs/PRODUCT_UI_REDESIGN_PROGRESS.md`.
+
+The current Audio Analysis V2 / Visualizer Renderer V3 work has two distinct statuses:
+
+- Audio Analysis V2 is committed at `bdda224687761cd9b888edbd44e607d506b16d9b` and
+  locally passes unit tests, lint, and debug assembly.
+- Seven dedicated Visualizer V3 renderers, API 26–32 Canvas fallbacks, static Appearance
+  previews, persisted-ID mapping, and pause-time analysis clearing are implemented in the
+  working checkpoint and locally pass unit tests, lint, and debug assembly.
+- The dirty-checkpoint APK installed over retained data on Redmi 12 5G / Android 15.
+  All seven V3 modes entered composition without fatal/RuntimeShader errors, reduced
+  motion disabled their selectors, Wireframe Terrain populated from real FFT data, and
+  screen-off playback plus media-key pause remained functional.
+- A final human aesthetic sign-off for every mode and the remaining Product UI Redesign
+  preservation checks have not been completed.
+
+See `docs/AUDIO_ANALYSIS_V2_VISUALIZER_V3.md` for the implementation and verification
+boundary. Product UI Redesign is still **IN PROGRESS**, not LOCAL PASS.
 
 Merged baseline on `main`:
 
@@ -193,6 +217,13 @@ Recent runs fail before any workflow step starts (`steps = 0`). Old APK artifact
 Temporary work directory:
 
 `cacheDir/wms-acquisition-jobs/job-<uuid>`
+
+Device audit note from 2026-09-15: two old job directories from earlier sessions remained
+under this cache root while no acquisition service was active. The current `finally`
+cleanup covers normal success/failure/cancel unwind, but a process death or app update can
+bypass it; no startup stale-job cleanup is implemented. The directories were left intact
+for diagnosis. This is a recorded follow-up constraint, not evidence that the current
+normal completion path failed.
 
 Successful final media directory:
 

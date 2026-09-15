@@ -203,13 +203,4 @@ private fun abLoopLabel(state: AbLoopState): String = when {
     else -> "A地点とB地点を設定すると、この区間を繰り返せます。"
 }
 
-private fun visualizerLabel(mode: VisualizerMode): String = when (mode.id) {
-    "rainbow-ring" -> "レインボーリング"
-    "oscilloscope" -> "オシロスコープ"
-    "spectrum-city" -> "スペクトラム"
-    "neon-tunnel" -> "ネオントンネル"
-    "kaleido" -> "カレイド"
-    "particles" -> "パーティクル"
-    "minimal" -> "ミニマル"
-    else -> mode.id.replaceFirstChar { it.uppercase() }
-}
+private fun visualizerLabel(mode: VisualizerMode): String = mode.displayName

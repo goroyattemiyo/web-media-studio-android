@@ -28,4 +28,23 @@ class VisualizerTest {
             VisualizerMode.entries.map { it.id }.toSet(),
         )
     }
+
+    @Test
+    fun flagshipRendererTypesAreExplicitlyV3Implemented() {
+        assertEquals(
+            setOf(
+                VisualizerRendererType.LIQUID_METABALLS,
+                VisualizerRendererType.FLOW_FIELD,
+                VisualizerRendererType.VORONOI_SHARDS,
+                VisualizerRendererType.SPECTROGRAM_WATERFALL,
+                VisualizerRendererType.WIREFRAME_TERRAIN,
+                VisualizerRendererType.GLYPH_RAIN,
+                VisualizerRendererType.PHOSPHOR_LISSAJOUS,
+            ),
+            VisualizerMode.entries
+                .filter { it.implementationStatus == VisualizerImplementationStatus.V3_IMPLEMENTED }
+                .map { it.rendererType }
+                .toSet(),
+        )
+    }
 }

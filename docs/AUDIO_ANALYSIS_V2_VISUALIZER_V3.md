@@ -3,7 +3,7 @@
 Date: 2026-09-15  
 Branch: `plan/product-ui-redesign`
 
-Status: **PHASE A LOCAL PASS / PHASE B PENDING**
+Status: **PHASE A LOCAL PASS / PHASE B DEVICE SMOKE PASS**
 
 ## Previous pseudo-spectrum problem
 
@@ -100,7 +100,78 @@ Phase A verification result on 2026-09-15: `testDebugUnitTest`, `lintDebug`, and
 
 ## Phase B renderer status
 
-Renderer work has not started in this checkpoint section. V3 status and Redmi evidence
-will be added only after Phase A is committed and the required renderers are verified.
+Phase B replaces seven V2 Canvas renderers with dedicated V3 implementations while
+preserving every canonical DataStore ID:
+
+| Persisted ID | V3 renderer | Primary analysis inputs |
+| --- | --- | --- |
+| `pulse` | Liquid Metaballs | bass, mid, high, onset |
+| `orbit` | Flow Field | bass, mid, high, centroid, onset, FFT bins |
+| `particles` | Voronoi Shards | FFT bins, flux, onset |
+| `wave` | Spectrogram Waterfall | 48-bin FFT history |
+| `bars` | Wireframe Terrain | 48-bin FFT history |
+| `neon-tunnel` | Glyph Rain | bass, mid, high, onset |
+| `oscilloscope` | Phosphor Lissajous | separate left/right waveforms, high band |
+
+`rainbow-ring`, `spectrum-city`, `kaleido`, `emblem`, and `minimal` retain their V2
+renderers for this checkpoint. Their IDs and saved preferences remain valid.
+
+### Rendering and compatibility
+
+- API 33+ uses Android `RuntimeShader` for Liquid Metaballs and Voronoi Shards.
+- API 26–32 uses Compose Canvas fallbacks for both shader-backed modes.
+- Flow Field and Glyph Rain own bounded 30 Hz state loops which are canceled when their
+  composables leave composition.
+- Phase animation is limited to renderers that need time even when no new PCM frame is
+  published. Spectrum and waveform-history renderers update only from analysis frames.
+- Reduced motion replaces the selected renderer with the static `minimal` renderer and
+  does not start V3 animation loops.
+- Appearance uses static representative previews, so opening the selector does not start
+  twelve live visualizers.
+- Pausing playback clears the last PCM analysis frame to prevent stale energy from
+  remaining visible.
+
+### Phase B local verification
+
+Local Windows verification on 2026-09-15 JST passed:
+
+- `:app:testDebugUnitTest`
+- `:app:lintDebug`
+- `:app:assembleDebug`
+- canonical persisted-ID compatibility test
+- explicit mapping test for all seven V3 renderer types
+
+The locally produced dirty-checkpoint APK is:
+
+`dist/wms-android-0.8.0-a8-dev-distribution-v12-bdda22468776-dirty-debug.apk`
+
+SHA-256:
+
+`2EF84F0CAF8A4DE1F146B12AFF3E192F3D6DF4EA28448309C86DA633B9DB03E7`
+
+### Phase B target-device smoke verification
+
+Verified on Redmi 12 5G / Android 15 (API 35) on 2026-09-15:
+
+- dirty-checkpoint APK installed with `adb install -r`; package version remained
+  `0.8.0-a8-dev-distribution` / versionCode `12`
+- the update retained the Room database, DataStore preferences, selected media, artwork,
+  and existing playback position
+- all seven V3 modes were selected in Full Player and entered composition without a
+  process restart, fatal exception, or RuntimeShader error
+- both API 33+ shader modes, Liquid Metaballs and Voronoi Shards, rendered without a
+  shader-initialization failure
+- a device screenshot confirmed Voronoi Shards produced a non-empty Home media surface
+- Wireframe Terrain changed from its paused empty grid to populated FFT history during
+  muted playback, demonstrating the real PCM -> FFT -> renderer path
+- enabling reduced motion disabled the visualizer choices; it was then turned off
+- screen-off playback remained `PLAYING` through MediaSession and a screen-off media
+  pause returned the session to `PAUSED`
+- the original `particles` preference, paused state, and media volume were restored after
+  verification
+
+This is a renderer/runtime smoke pass, not a final human aesthetic sign-off for every
+mode. Product UI Redesign as a whole must not be called LOCAL PASS until its remaining
+designer-polish and preservation checks pass.
 
 Product UI Redesign remains **IN PROGRESS**, not FINAL PASS.

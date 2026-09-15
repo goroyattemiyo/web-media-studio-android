@@ -317,3 +317,33 @@ checkpoint; this is not Product UI Redesign FINAL PASS.
 
 The Appearance selector can receive a separate static-preview tile polish in the final
 Designer Polish checkpoint. Product UI Redesign remains **IN PROGRESS**, not FINAL PASS.
+
+## Checkpoint 10 — Audio Analysis V2 and Visualizer Renderer V3
+
+Phase A is committed at `bdda224687761cd9b888edbd44e607d506b16d9b`:
+
+- [x] replaced the pseudo-spectrum with a 2048-sample Hann-windowed radix-2 FFT
+- [x] added 48 logarithmic bins, named bands, centroid, flux, onset, and stereo waveforms
+- [x] moved FFT/reduction off the audio callback onto one bounded worker
+- [x] covered synthetic frequencies, sample-rate mapping, stereo, onset/flux, PCM16, and
+  PCM-float paths with JVM tests
+
+Phase B is locally implemented:
+
+- [x] added dedicated Liquid Metaballs, Flow Field, Voronoi Shards, Spectrogram
+  Waterfall, Wireframe Terrain, Glyph Rain, and Phosphor Lissajous renderers
+- [x] preserved all twelve persisted visualizer IDs and mapped renderer type explicitly
+- [x] added API 26–32 Canvas fallbacks for the two API 33+ RuntimeShader renderers
+- [x] added static Appearance previews rather than twelve concurrent live renderers
+- [x] made reduced motion route to `minimal` without starting V3 animation loops
+- [x] cleared the shared PCM frame when playback pauses
+- [x] passed local `testDebugUnitTest`, `lintDebug`, and `assembleDebug` on 2026-09-15
+- [x] verified both RuntimeShader modes and all seven V3 selections on Redmi 12 5G /
+  Android 15 without a fatal error or process restart
+- [x] verified reduced-motion selector disabling, real FFT terrain history, screen-off
+  playback/media pause, and retained-data update installation
+
+The detailed architecture and exact verification boundary are recorded in
+`AUDIO_ANALYSIS_V2_VISUALIZER_V3.md`. This checkpoint is **DEVICE SMOKE PASS**; a final
+human aesthetic sign-off for every mode and the broader preservation sweep remain.
+Product UI Redesign is still **IN PROGRESS**, not FINAL PASS.

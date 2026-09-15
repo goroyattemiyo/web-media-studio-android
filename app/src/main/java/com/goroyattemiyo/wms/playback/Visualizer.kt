@@ -27,12 +27,28 @@ enum class VisualizerMode(val id: String, val displayName: String) {
 }
 
 data class AudioAnalysisFrame(
+    val rms: Float = 0f,
+    val peak: Float = 0f,
     val normalizedLevel: Float = 0f,
     val phase: Float = 0f,
-    val waveform: List<Float> = emptyList(),
-    val signedWaveform: List<Float> = emptyList(),
-    val spectrum: List<Float> = emptyList(),
-)
+    val waveform: FloatArray = FloatArray(0),
+    val leftWaveform: FloatArray = FloatArray(0),
+    val rightWaveform: FloatArray = FloatArray(0),
+    val fftBins: FloatArray = FloatArray(0),
+    val bass: Float = 0f,
+    val lowMid: Float = 0f,
+    val mid: Float = 0f,
+    val high: Float = 0f,
+    val spectralCentroid: Float = 0f,
+    val spectralFlux: Float = 0f,
+    val onsetStrength: Float = 0f,
+    val animationTimeSeconds: Float = 0f,
+    val sampleRateHz: Int = 0,
+    val channelCount: Int = 0,
+) {
+    val signedWaveform: FloatArray get() = waveform
+    val spectrum: FloatArray get() = fftBins
+}
 
 /** Boundary between the service-owned PCM analyzer and native visual renderers. */
 interface AudioAnalysisDataSource {
@@ -40,7 +56,7 @@ interface AudioAnalysisDataSource {
 }
 
 data class VisualizerRenderState(
-    val values: List<Float>,
+    val values: FloatArray,
     val emphasis: Float,
 )
 
@@ -64,15 +80,17 @@ object LightweightVisualizerRenderer : VisualizerRenderer {
             VisualizerMode.ORBIT -> 8
             else -> 1
         }
-        val values = List(count) { index ->
+        val values = FloatArray(count) { index ->
             val angle = phase * 2f * PI.toFloat() + index * PI.toFloat() / count
             val source = when (mode) {
-                VisualizerMode.OSCILLOSCOPE, VisualizerMode.WAVE -> frame.waveform
-                VisualizerMode.SPECTRUM_CITY, VisualizerMode.BARS -> frame.spectrum
-                else -> emptyList()
+                VisualizerMode.OSCILLOSCOPE -> frame.waveform
+                VisualizerMode.WAVE, VisualizerMode.SPECTRUM_CITY, VisualizerMode.BARS -> frame.fftBins
+                else -> FloatArray(0)
             }
             val sampleIndex = index * source.size.coerceAtLeast(1) / count
-            source.getOrNull(sampleIndex)
+            source.getOrNull(sampleIndex)?.let { sample ->
+                if (mode == VisualizerMode.OSCILLOSCOPE) sample * 0.5f + 0.5f else sample
+            }
                 ?: (0.2f + abs(sin(angle)) * 0.8f * level).coerceIn(0f, 1f)
         }
         val emphasis = when (mode) {

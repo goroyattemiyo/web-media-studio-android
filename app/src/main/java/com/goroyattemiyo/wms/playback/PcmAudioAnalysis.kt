@@ -10,8 +10,8 @@ import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.audio.TeeAudioProcessor
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import kotlin.math.abs
-import kotlin.math.sqrt
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
@@ -28,71 +28,147 @@ object PcmAudioAnalysisBus : AudioAnalysisDataSource {
     }
 }
 
+/**
+ * Audio-thread work is limited to decoding PCM into fixed primitive rings. FFT, smoothing,
+ * waveform reduction, and frame allocation run on one bounded analysis worker.
+ */
 @UnstableApi
-internal class PcmAnalysisBufferSink : TeeAudioProcessor.AudioBufferSink {
-    private var encoding: Int = C.ENCODING_INVALID
-    private var lastPublishedMs = 0L
+internal class PcmAnalysisBufferSink(
+    private val analyzer: AudioAnalysisEngine = AudioAnalysisEngine(),
+) : TeeAudioProcessor.AudioBufferSink, AutoCloseable {
+    private val leftRing = FloatArray(analyzer.windowSize)
+    private val rightRing = FloatArray(analyzer.windowSize)
+    private val analysisLeft = FloatArray(analyzer.windowSize)
+    private val analysisRight = FloatArray(analyzer.windowSize)
+    private val worker = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "wms-audio-analysis").apply { isDaemon = true }
+    }
+    private val analysisPending = AtomicBoolean(false)
+
+    @Volatile private var sampleRateHz = 0
+    @Volatile private var channelCount = 0
+    @Volatile private var encoding = C.ENCODING_INVALID
+    @Volatile private var writeIndex = 0
+    @Volatile private var availableSamples = 0
+    @Volatile private var generation = 0L
+    @Volatile private var writeSequence = 0L
+    private var lastScheduledNanos = 0L
+    @Volatile private var closed = false
 
     override fun flush(sampleRateHz: Int, channelCount: Int, encoding: Int) {
-        this.encoding = encoding
-        lastPublishedMs = 0L
+        if (closed) return
+        writeSequence++
+        try {
+            this.sampleRateHz = sampleRateHz
+            this.channelCount = channelCount
+            this.encoding = encoding
+            writeIndex = 0
+            availableSamples = 0
+            generation++
+            leftRing.fill(0f)
+            rightRing.fill(0f)
+        } finally {
+            writeSequence++
+        }
+        worker.execute { analyzer.reset() }
         PcmAudioAnalysisBus.clear()
     }
 
     override fun handleBuffer(buffer: ByteBuffer) {
-        val nowMs = System.nanoTime() / 1_000_000L
-        if (nowMs - lastPublishedMs < 50L) return
-        val samples = when (encoding) {
-            C.ENCODING_PCM_16BIT -> readPcm16(buffer)
-            C.ENCODING_PCM_FLOAT -> readPcmFloat(buffer)
-            else -> emptyList()
+        if (closed) return
+        val now = System.nanoTime()
+        writeSequence++
+        try {
+            copyPcmIntoRing(buffer)
+        } finally {
+            writeSequence++
         }
-        if (samples.isEmpty()) return
-        lastPublishedMs = nowMs
+        if (now - lastScheduledNanos < ANALYSIS_INTERVAL_NANOS) return
+        if (!analysisPending.compareAndSet(false, true)) return
+        lastScheduledNanos = now
+        val requestedGeneration = generation
+        worker.execute {
+            try {
+                val frame = analyzeStableSnapshot(requestedGeneration) ?: return@execute
+                if (!closed && generation == requestedGeneration) PcmAudioAnalysisBus.publish(frame)
+            } finally {
+                analysisPending.set(false)
+            }
+        }
+    }
 
-        val level = sqrt(samples.sumOf { (it * it).toDouble() } / samples.size)
-            .toFloat()
-            .coerceIn(0f, 1f)
-        PcmAudioAnalysisBus.publish(
-            AudioAnalysisFrame(
-                normalizedLevel = (level * 2.2f).coerceIn(0f, 1f),
-                waveform = downsample(samples, 32) { it * 0.5f + 0.5f },
-                signedWaveform = downsample(samples, 32) { it },
-                spectrum = downsample(samples, 20) { abs(it) },
-            ),
+    private fun copyPcmIntoRing(source: ByteBuffer) {
+        if (channelCount !in 1..2) return
+        val bytesPerSample = when (encoding) {
+            C.ENCODING_PCM_16BIT -> Short.SIZE_BYTES
+            C.ENCODING_PCM_FLOAT -> Float.SIZE_BYTES
+            else -> return
+        }
+        source.order(ByteOrder.LITTLE_ENDIAN)
+        val frameBytes = bytesPerSample * channelCount
+        var offset = source.position()
+        while (offset + frameBytes <= source.limit()) {
+            val left = readSample(source, offset)
+            offset += bytesPerSample
+            val right = if (channelCount == 2) {
+                readSample(source, offset).also { offset += bytesPerSample }
+            } else {
+                left
+            }
+            leftRing[writeIndex] = left
+            rightRing[writeIndex] = right
+            writeIndex = (writeIndex + 1) % leftRing.size
+            availableSamples = (availableSamples + 1).coerceAtMost(leftRing.size)
+        }
+    }
+
+    private fun readSample(input: ByteBuffer, offset: Int): Float = when (encoding) {
+        C.ENCODING_PCM_16BIT -> (input.getShort(offset) / 32768f).coerceIn(-1f, 1f)
+        C.ENCODING_PCM_FLOAT -> input.getFloat(offset).coerceIn(-1f, 1f)
+        else -> 0f
+    }
+
+    /** Seqlock-style snapshot: analysis drops a contested frame instead of blocking audio. */
+    private fun analyzeStableSnapshot(requestedGeneration: Long): AudioAnalysisFrame? {
+        val sequenceBefore = writeSequence
+        if (sequenceBefore and 1L != 0L || requestedGeneration != generation) return null
+        val capturedSampleRate = sampleRateHz
+        val capturedChannels = channelCount
+        val capturedAvailable = availableSamples
+        val capturedWriteIndex = writeIndex
+        if (capturedAvailable == 0 || capturedSampleRate <= 0) return null
+        analysisLeft.fill(0f)
+        analysisRight.fill(0f)
+        val padding = analyzer.windowSize - capturedAvailable
+        val oldestIndex = (capturedWriteIndex - capturedAvailable + analyzer.windowSize) % analyzer.windowSize
+        repeat(capturedAvailable) { offset ->
+            val ringIndex = (oldestIndex + offset) % analyzer.windowSize
+            analysisLeft[padding + offset] = leftRing[ringIndex]
+            analysisRight[padding + offset] = rightRing[ringIndex]
+        }
+        if (writeSequence != sequenceBefore || generation != requestedGeneration) return null
+        return analyzer.analyze(
+            left = analysisLeft,
+            right = analysisRight.takeIf { capturedChannels == 2 },
+            sampleRateHz = capturedSampleRate,
         )
     }
 
-    private fun readPcm16(source: ByteBuffer): List<Float> {
-        val input = source.asReadOnlyBuffer().order(ByteOrder.LITTLE_ENDIAN)
-        val count = (input.remaining() / Short.SIZE_BYTES).coerceAtMost(MAX_SAMPLES)
-        return List(count) { input.short / Short.MAX_VALUE.toFloat() }
+    override fun close() {
+        closed = true
+        worker.shutdownNow()
+        PcmAudioAnalysisBus.clear()
     }
-
-    private fun readPcmFloat(source: ByteBuffer): List<Float> {
-        val input = source.asReadOnlyBuffer().order(ByteOrder.LITTLE_ENDIAN)
-        val count = (input.remaining() / Float.SIZE_BYTES).coerceAtMost(MAX_SAMPLES)
-        return List(count) { input.float.coerceIn(-1f, 1f) }
-    }
-
-    private fun downsample(samples: List<Float>, buckets: Int, transform: (Float) -> Float): List<Float> =
-        List(buckets) { bucket ->
-            val start = bucket * samples.size / buckets
-            val end = ((bucket + 1) * samples.size / buckets).coerceAtLeast(start + 1)
-            samples.subList(start, end.coerceAtMost(samples.size))
-                .map(transform)
-                .average()
-                .toFloat()
-                .coerceIn(0f, 1f)
-        }
 
     private companion object {
-        const val MAX_SAMPLES = 4_096
+        const val ANALYSIS_INTERVAL_NANOS = 40_000_000L // 25 Hz maximum publication rate.
     }
 }
 
 @UnstableApi
-internal class AnalysisRenderersFactory(context: Context) : DefaultRenderersFactory(context) {
+internal class AnalysisRenderersFactory(context: Context) : DefaultRenderersFactory(context), AutoCloseable {
+    private val analysisSink = PcmAnalysisBufferSink()
+
     override fun buildAudioSink(
         context: Context,
         enableFloatOutput: Boolean,
@@ -100,6 +176,8 @@ internal class AnalysisRenderersFactory(context: Context) : DefaultRenderersFact
     ): AudioSink = DefaultAudioSink.Builder(context)
         .setEnableFloatOutput(enableFloatOutput)
         .setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams)
-        .setAudioProcessors(arrayOf<AudioProcessor>(TeeAudioProcessor(PcmAnalysisBufferSink())))
+        .setAudioProcessors(arrayOf<AudioProcessor>(TeeAudioProcessor(analysisSink)))
         .build()
+
+    override fun close() = analysisSink.close()
 }

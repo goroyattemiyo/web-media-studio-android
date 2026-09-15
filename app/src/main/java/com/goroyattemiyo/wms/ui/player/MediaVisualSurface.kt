@@ -104,7 +104,7 @@ private fun AudioVisualizer(
     )
     val primary = MaterialTheme.colorScheme.primary
     val secondary = MaterialTheme.colorScheme.secondary
-    val history = remember(visualizerMode) { mutableStateListOf<List<Float>>() }
+    val history = remember(visualizerMode) { mutableStateListOf<FloatArray>() }
     androidx.compose.runtime.LaunchedEffect(analysisFrame.spectrum) {
         if (visualizerMode == VisualizerMode.WAVE && analysisFrame.spectrum.isNotEmpty()) {
             history.add(analysisFrame.spectrum)
@@ -118,7 +118,11 @@ private fun AudioVisualizer(
             VisualizerMode.MINIMAL -> drawLine(primary.copy(alpha = 0.7f), androidx.compose.ui.geometry.Offset(size.width * .2f, center.y), androidx.compose.ui.geometry.Offset(size.width * .8f, center.y), 2.dp.toPx())
             VisualizerMode.OSCILLOSCOPE -> {
                 val path = Path()
-                val source = analysisFrame.signedWaveform.ifEmpty { values.map { it - .5f } }
+                val source = if (analysisFrame.signedWaveform.isNotEmpty()) {
+                    analysisFrame.signedWaveform
+                } else {
+                    FloatArray(values.size) { values[it] - .5f }
+                }
                 source.forEachIndexed { index, value ->
                     val t = index.toFloat() / source.lastIndex.coerceAtLeast(1) * PI.toFloat() * 2f
                     val x = center.x + value * size.width * .38f
@@ -201,7 +205,7 @@ private fun AudioVisualizer(
     }
 }
 
-private fun DrawScope.drawTerrain(values: List<Float>, primary: Color, secondary: Color) {
+private fun DrawScope.drawTerrain(values: FloatArray, primary: Color, secondary: Color) {
     repeat(8) { depth ->
         val yBase = size.height * (.2f + depth * .09f)
         val path = Path()

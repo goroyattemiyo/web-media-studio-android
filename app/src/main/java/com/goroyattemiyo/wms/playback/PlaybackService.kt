@@ -31,6 +31,7 @@ class PlaybackService : MediaLibraryService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var player: ExoPlayer
+    private var analysisCloser: AutoCloseable? = null
     private var librarySession: MediaLibrarySession? = null
     private var abLoopState = AbLoopState()
 
@@ -83,7 +84,9 @@ class PlaybackService : MediaLibraryService() {
     @UnstableApi
     override fun onCreate() {
         super.onCreate()
-        player = ExoPlayer.Builder(this, AnalysisRenderersFactory(this)).build().apply {
+        val analysisRenderersFactory = AnalysisRenderersFactory(this)
+        analysisCloser = analysisRenderersFactory
+        player = ExoPlayer.Builder(this, analysisRenderersFactory).build().apply {
             setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -165,6 +168,8 @@ class PlaybackService : MediaLibraryService() {
         librarySession = null
         player.removeListener(playerListener)
         player.release()
+        analysisCloser?.close()
+        analysisCloser = null
         serviceScope.cancel()
         super.onDestroy()
     }

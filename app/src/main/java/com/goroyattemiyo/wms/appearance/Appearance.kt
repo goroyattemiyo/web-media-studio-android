@@ -5,13 +5,15 @@ import android.content.Context
 import android.net.Uri
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.goroyattemiyo.wms.playback.VisualizerMode
+import java.io.File
 import java.io.IOException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
@@ -154,10 +156,18 @@ class AppearanceRepository(private val context: Context) {
     }
 
     suspend fun importBackgroundImage(uri: Uri) {
-        val destination = java.io.File(context.filesDir, "appearance/background-image").apply { parentFile?.mkdirs() }
+        val destination = File(context.filesDir, BACKGROUND_IMAGE_FILE).apply { parentFile?.mkdirs() }
         context.contentResolver.openInputStream(uri)?.use { input -> destination.outputStream().use(input::copyTo) }
             ?: return
         context.appearanceDataStore.edit { it[BACKGROUND_IMAGE_PATH] = destination.absolutePath }
+    }
+
+    suspend fun clearBackgroundImage() {
+        context.appearanceDataStore.edit { preferences ->
+            preferences.remove(BACKGROUND_IMAGE_PATH)
+            preferences[BACKGROUND_BLUR] = 0f
+        }
+        File(context.filesDir, BACKGROUND_IMAGE_FILE).delete()
     }
 
     suspend fun setBackgroundBlur(blur: Float) {
@@ -165,6 +175,7 @@ class AppearanceRepository(private val context: Context) {
     }
 
     private companion object {
+        const val BACKGROUND_IMAGE_FILE = "appearance/background-image"
         val SKIN_ID = stringPreferencesKey("skin_id")
         val BACKGROUND_ID = stringPreferencesKey("background_id")
         val VISUALIZER_ID = stringPreferencesKey("visualizer_id")
@@ -182,6 +193,7 @@ class AppearanceViewModel(application: Application) : AndroidViewModel(applicati
     fun selectBackground(id: String) = viewModelScope.launch { repository.selectBackground(id) }
     fun selectVisualizer(id: String) = viewModelScope.launch { repository.selectVisualizer(id) }
     fun setReducedMotion(enabled: Boolean) = viewModelScope.launch { repository.setReducedMotion(enabled) }
-    fun importBackgroundImage(uri: Uri) = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) { repository.importBackgroundImage(uri) }
+    fun importBackgroundImage(uri: Uri) = viewModelScope.launch(Dispatchers.IO) { repository.importBackgroundImage(uri) }
+    fun clearBackgroundImage() = viewModelScope.launch(Dispatchers.IO) { repository.clearBackgroundImage() }
     fun setBackgroundBlur(blur: Float) = viewModelScope.launch { repository.setBackgroundBlur(blur) }
 }

@@ -39,13 +39,41 @@ internal fun LegacyVisualizerRenderer(
                 }
                 drawPath(path, primary.copy(alpha = 0.42f + frame.normalizedLevel * 0.5f), style = Stroke(1.2f + frame.normalizedLevel * 2.6f))
             }
-            VisualizerMode.RAINBOW_RING -> repeat(9) { index ->
-                val radius = size.minDimension * (0.08f + index * 0.055f + renderState.emphasis * 0.02f)
-                drawCircle(
-                    Color.hsv((index * 32f + phase * 100f) % 360f, 0.7f, 1f).copy(alpha = 0.7f),
-                    radius,
-                    style = Stroke((10 - index).toFloat()),
+            VisualizerMode.RAINBOW_RING -> {
+                val ringCount = 12
+                val bass = frame.bass.coerceIn(0f, 1f)
+                val high = frame.high.coerceIn(0f, 1f)
+                val onset = frame.onsetStrength.coerceIn(0f, 1f)
+                val tunnelTravel = phase * 1.8f + bass * 0.10f + onset * 0.16f
+                val vanishingPoint = Offset(
+                    center.x + sin(phase * 2f * PI.toFloat()) * size.width * 0.035f,
+                    center.y + cos(phase * 2f * PI.toFloat() * 0.72f) * size.height * 0.025f,
                 )
+
+                repeat(ringCount) { index ->
+                    val depth = (index / ringCount.toFloat() + tunnelTravel) % 1f
+                    val perspective = depth * depth
+                    val zoom = 1f + bass * 0.30f + onset * 0.24f
+                    val radius = size.minDimension * (0.025f + perspective * 0.52f) * zoom
+                    val alpha = (0.10f + depth * 0.78f + high * 0.10f).coerceIn(0f, 1f)
+                    val strokeWidth = 1.2f + depth * 7.5f + high * 4.0f
+                    val hue = (index * 29f + phase * 260f + high * 70f) % 360f
+                    drawCircle(
+                        color = Color.hsv(hue, 0.72f, 1f).copy(alpha = alpha),
+                        radius = radius,
+                        center = vanishingPoint,
+                        style = Stroke(strokeWidth),
+                    )
+                }
+
+                if (onset > 0.08f) {
+                    drawCircle(
+                        color = Color.White.copy(alpha = (onset * 0.45f).coerceIn(0f, 0.45f)),
+                        radius = size.minDimension * (0.10f + onset * 0.34f),
+                        center = vanishingPoint,
+                        style = Stroke(2f + onset * 5f),
+                    )
+                }
             }
             VisualizerMode.SPECTRUM_CITY -> renderState.values.forEachIndexed { index, value ->
                 val width = size.width / (renderState.values.size * 1.25f)

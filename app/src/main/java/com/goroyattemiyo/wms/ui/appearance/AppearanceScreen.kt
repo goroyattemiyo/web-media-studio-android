@@ -19,8 +19,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -46,6 +46,7 @@ fun AppearanceScreen(
     onVisualizerSelected: (String) -> Unit,
     onReducedMotionChanged: (Boolean) -> Unit,
     onChooseBackgroundImage: () -> Unit,
+    onClearBackgroundImage: () -> Unit,
     onBackgroundBlurChanged: (Float) -> Unit,
 ) {
     Column(
@@ -68,6 +69,9 @@ fun AppearanceScreen(
             Text(if (settings.backgroundImagePath == null) "端末から背景画像を選ぶ" else "背景画像を変更")
         }
         if (settings.backgroundImagePath != null) {
+            TextButton(onClick = onClearBackgroundImage, modifier = Modifier.fillMaxWidth()) {
+                Text("背景画像を解除")
+            }
             Text("背景のぼかし", fontWeight = FontWeight.Bold)
             Slider(value = settings.backgroundBlur, onValueChange = onBackgroundBlurChanged, valueRange = 0f..24f)
         }
@@ -171,7 +175,7 @@ private fun SkinPreviewTile(
         ) {
             Box(
                 modifier = Modifier
-                .size(46.dp)
+                    .size(46.dp)
                     .background(Color(skin.background), RoundedCornerShape(14.dp))
                     .padding(7.dp),
                 contentAlignment = Alignment.Center,

@@ -10,10 +10,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -38,7 +38,6 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.goroyattemiyo.wms.library.MediaEntity
 import com.goroyattemiyo.wms.playback.PlaybackService
-import com.goroyattemiyo.wms.playback.toPlaybackMediaItem
 import com.goroyattemiyo.wms.ui.components.formatPlaybackTime
 import com.goroyattemiyo.wms.ui.media.MediaArtwork
 import com.goroyattemiyo.wms.ui.media.toMediaPresentation
@@ -49,7 +48,6 @@ import kotlinx.coroutines.delay
 fun SavedMiniPlayer(
     controller: MediaController?,
     media: MediaEntity,
-    playbackRequest: PlaybackRequest?,
     onPositionChanged: (Long) -> Unit,
     onMediaTransition: (String) -> Unit,
     onOpenNowPlaying: () -> Unit,
@@ -139,25 +137,6 @@ fun SavedMiniPlayer(
         else -> "Local · 準備中"
     }
 
-    LaunchedEffect(controller, playbackRequest) {
-        if (controller != null && playbackRequest != null) {
-            val playableQueue = playbackRequest.queue.filter { item ->
-                File(item.localPath).let { it.exists() && it.length() > 0L }
-            }
-            val startIndex = playableQueue.indexOfFirst { it.id == playbackRequest.mediaId }
-            if (startIndex >= 0) {
-                val requestedMedia = playableQueue[startIndex]
-                controller.setMediaItems(
-                    playableQueue.map(MediaEntity::toPlaybackMediaItem),
-                    startIndex,
-                    requestedMedia.lastPositionMs.coerceAtLeast(0L),
-                )
-                controller.prepare()
-                controller.play()
-            }
-        }
-    }
-
     val presentation = remember(media) { media.toMediaPresentation() }
 
     Card(
@@ -174,7 +153,7 @@ fun SavedMiniPlayer(
                     .fillMaxWidth()
                     .clickable(onClick = onOpenNowPlaying),
                 verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 MediaArtwork(
                     media = presentation,
@@ -199,6 +178,11 @@ fun SavedMiniPlayer(
                         style = MaterialTheme.typography.bodySmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = statusText,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelSmall,
                     )
                 }
                 IconButton(

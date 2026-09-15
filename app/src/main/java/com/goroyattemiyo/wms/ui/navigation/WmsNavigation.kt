@@ -5,13 +5,12 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 
-enum class AppTab { HOME, LIBRARY }
+enum class AppTab { HOME, LIBRARY, PLAYER }
 
 @Composable
 fun BottomNavigation(
     selectedTab: AppTab,
     onSelect: (AppTab) -> Unit,
-    onOpenPlayer: () -> Unit,
 ) {
     NavigationBar {
         NavigationBarItem(
@@ -27,8 +26,8 @@ fun BottomNavigation(
             label = { Text("Library") },
         )
         NavigationBarItem(
-            selected = false,
-            onClick = onOpenPlayer,
+            selected = selectedTab == AppTab.PLAYER,
+            onClick = { onSelect(AppTab.PLAYER) },
             icon = { Text("▶") },
             label = { Text("Player") },
         )

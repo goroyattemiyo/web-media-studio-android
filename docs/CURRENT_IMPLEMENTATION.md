@@ -24,8 +24,9 @@ The current Audio Analysis V2 / Visualizer Renderer V3 work has two distinct sta
 - Audio Analysis V2 is committed at `bdda224687761cd9b888edbd44e607d506b16d9b` and
   locally passes unit tests, lint, and debug assembly.
 - Seven dedicated Visualizer V3 renderers, API 26–32 Canvas fallbacks, static Appearance
-  previews, persisted-ID mapping, and pause-time analysis clearing are implemented in the
-  working checkpoint and locally pass unit tests, lint, and debug assembly.
+  previews, persisted-ID mapping, and pause-time analysis clearing are committed at
+  `2c36719879a363b8f75ab1893a638b1bc9370049` and locally pass unit tests, lint, and
+  debug assembly.
 - The dirty-checkpoint APK installed over retained data on Redmi 12 5G / Android 15.
   All seven V3 modes entered composition without fatal/RuntimeShader errors, reduced
   motion disabled their selectors, Wireframe Terrain populated from real FFT data, and

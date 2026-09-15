@@ -330,6 +330,8 @@ Phase A is committed at `bdda224687761cd9b888edbd44e607d506b16d9b`:
 
 Phase B is locally implemented:
 
+Code checkpoint: `2c36719879a363b8f75ab1893a638b1bc9370049`
+
 - [x] added dedicated Liquid Metaballs, Flow Field, Voronoi Shards, Spectrogram
   Waterfall, Wireframe Terrain, Glyph Rain, and Phosphor Lissajous renderers
 - [x] preserved all twelve persisted visualizer IDs and mapped renderer type explicitly

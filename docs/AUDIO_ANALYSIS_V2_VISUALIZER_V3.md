@@ -100,6 +100,8 @@ Phase A verification result on 2026-09-15: `testDebugUnitTest`, `lintDebug`, and
 
 ## Phase B renderer status
 
+Code checkpoint: `2c36719879a363b8f75ab1893a638b1bc9370049`
+
 Phase B replaces seven V2 Canvas renderers with dedicated V3 implementations while
 preserving every canonical DataStore ID:
 

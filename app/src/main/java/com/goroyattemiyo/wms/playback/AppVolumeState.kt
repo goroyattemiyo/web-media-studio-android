@@ -9,6 +9,7 @@ data class AppVolumeState(
     val lastAudiblePercent: Int = 100,
     val boostEnabled: Boolean = false,
     val boostAvailable: Boolean = false,
+    val limitedFrames: Long = 0,
     val message: String = "",
 ) {
     val maximum: Int get() = if (boostEnabled && boostAvailable) 200 else 100

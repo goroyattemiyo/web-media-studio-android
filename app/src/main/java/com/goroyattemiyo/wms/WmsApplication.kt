@@ -11,8 +11,6 @@ import androidx.room.Room
 import com.goroyattemiyo.wms.library.MediaRepository
 import com.goroyattemiyo.wms.library.WmsDatabase
 import com.goroyattemiyo.wms.playlist.PlaylistRepository
-import com.goroyattemiyo.wms.ui.startup.StartupExperiencePreferences
-import com.goroyattemiyo.wms.ui.startup.StartupSonicLogo
 import java.lang.ref.WeakReference
 
 class WmsApplication : Application() {
@@ -40,12 +38,6 @@ class WmsApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-
-        // Start the cold-start hum as early as possible, before MainActivity/Compose draws
-        // the animated WMS logo. StartupSoundPlayer itself prevents duplicate playback.
-        if (StartupExperiencePreferences.soundEnabled(this)) {
-            StartupSonicLogo.playIfAllowed(this)
-        }
 
         registerActivityLifecycleCallbacks(
             object : Application.ActivityLifecycleCallbacks {

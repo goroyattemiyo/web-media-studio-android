@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -60,9 +61,14 @@ fun NowPlayingScreen(
     onVisualizerSelected: (String) -> Unit,
     controller: MediaController?,
 ) {
+    var currentMediaId by remember(controller) {
+        mutableStateOf(controller?.currentMediaItem?.mediaId?.takeIf(String::isNotBlank))
+    }
+    val activeMedia = queue.firstOrNull { it.id == currentMediaId } ?: media
+
     var playing by remember { mutableStateOf(false) }
-    var position by remember(media?.id) { mutableLongStateOf(media?.lastPositionMs ?: 0L) }
-    var duration by remember(media?.id) { mutableLongStateOf(media?.durationMs ?: 0L) }
+    var position by remember(activeMedia?.id) { mutableLongStateOf(activeMedia?.lastPositionMs ?: 0L) }
+    var duration by remember(activeMedia?.id) { mutableLongStateOf(activeMedia?.durationMs ?: 0L) }
     var seeking by remember { mutableStateOf(false) }
     var fraction by remember { mutableFloatStateOf(0f) }
     var previous by remember { mutableStateOf(false) }
@@ -73,34 +79,72 @@ fun NowPlayingScreen(
     var speed by remember { mutableFloatStateOf(1f) }
     var repeatMode by remember { mutableStateOf(RepeatOption.OFF) }
     var shuffleEnabled by remember { mutableStateOf(false) }
-    var abLoop by remember(media?.id) { mutableStateOf(AbLoopState()) }
+    var abLoop by remember(activeMedia?.id) { mutableStateOf(AbLoopState()) }
+
     DisposableEffect(controller) {
         if (controller == null) return@DisposableEffect onDispose {}
         val listener = object : Player.Listener {
-            override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying }
-            override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
-                previous = controller.hasPreviousMediaItem(); next = controller.hasNextMediaItem()
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                playing = isPlaying
             }
-            override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) { speed = playbackParameters.speed }
-            override fun onRepeatModeChanged(mode: Int) { repeatMode = RepeatOption.fromMedia3(mode) }
-            override fun onShuffleModeEnabledChanged(enabled: Boolean) { shuffleEnabled = enabled }
+
+            override fun onMediaItemTransition(item: MediaItem?, reason: Int) {
+                currentMediaId = item?.mediaId?.takeIf(String::isNotBlank)
+                previous = controller.hasPreviousMediaItem()
+                next = controller.hasNextMediaItem()
+            }
+
+            override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+                currentMediaId = controller.currentMediaItem?.mediaId?.takeIf(String::isNotBlank)
+                previous = controller.hasPreviousMediaItem()
+                next = controller.hasNextMediaItem()
+            }
+
+            override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) {
+                speed = playbackParameters.speed
+            }
+
+            override fun onRepeatModeChanged(mode: Int) {
+                repeatMode = RepeatOption.fromMedia3(mode)
+            }
+
+            override fun onShuffleModeEnabledChanged(enabled: Boolean) {
+                shuffleEnabled = enabled
+            }
         }
         controller.addListener(listener)
-        playing = controller.isPlaying; previous = controller.hasPreviousMediaItem(); next = controller.hasNextMediaItem()
-        speed = controller.playbackParameters.speed; repeatMode = RepeatOption.fromMedia3(controller.repeatMode); shuffleEnabled = controller.shuffleModeEnabled
+        currentMediaId = controller.currentMediaItem?.mediaId?.takeIf(String::isNotBlank)
+        playing = controller.isPlaying
+        previous = controller.hasPreviousMediaItem()
+        next = controller.hasNextMediaItem()
+        speed = controller.playbackParameters.speed
+        repeatMode = RepeatOption.fromMedia3(controller.repeatMode)
+        shuffleEnabled = controller.shuffleModeEnabled
         onDispose { controller.removeListener(listener) }
     }
-    LaunchedEffect(controller, media?.id) {
+
+    LaunchedEffect(controller, activeMedia?.id) {
         while (true) {
             val known = controller?.duration ?: C.TIME_UNSET
-            duration = if (known == C.TIME_UNSET || known < 0L) media?.durationMs ?: 0L else known
-            if (!seeking) position = (controller?.currentPosition ?: 0L).coerceIn(0L, duration.coerceAtLeast(0L))
+            duration = if (known == C.TIME_UNSET || known < 0L) activeMedia?.durationMs ?: 0L else known
+            if (!seeking) {
+                position = (controller?.currentPosition ?: 0L)
+                    .coerceIn(0L, duration.coerceAtLeast(0L))
+            }
             delay(if (controller?.isPlaying == true) 250L else 750L)
         }
     }
+
     val shownPosition = if (seeking) (fraction * duration).toLong() else position
-    val shownFraction = if (seeking) fraction else if (duration > 0L) (position.toDouble() / duration).toFloat().coerceIn(0f, 1f) else 0f
-    val queueIndex = queue.indexOfFirst { it.id == media?.id }
+    val shownFraction = if (seeking) {
+        fraction
+    } else if (duration > 0L) {
+        (position.toDouble() / duration).toFloat().coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+    val queueIndex = queue.indexOfFirst { it.id == activeMedia?.id }
+
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -108,83 +152,229 @@ fun NowPlayingScreen(
     ) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack) { Text("‹") }
-            Text("Now Playing", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            if (media?.mediaType != "VIDEO") Box {
-                TextButton(onClick = { visualizerMenuOpen = true }, enabled = !reducedMotion) { Text("表示") }
-                DropdownMenu(expanded = visualizerMenuOpen, onDismissRequest = { visualizerMenuOpen = false }) {
+            Text(
+                "Now Playing",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            if (activeMedia?.mediaType != "VIDEO") Box {
+                TextButton(onClick = { visualizerMenuOpen = true }, enabled = !reducedMotion) {
+                    Text("表示")
+                }
+                DropdownMenu(
+                    expanded = visualizerMenuOpen,
+                    onDismissRequest = { visualizerMenuOpen = false },
+                ) {
                     VisualizerMode.entries.forEach { mode ->
                         DropdownMenuItem(
-                            text = { Text(if (mode == visualizerMode) "✓ ${visualizerLabel(mode)}" else visualizerLabel(mode)) },
-                            onClick = { onVisualizerSelected(mode.id); visualizerMenuOpen = false },
+                            text = {
+                                Text(
+                                    if (mode == visualizerMode) "✓ ${visualizerLabel(mode)}"
+                                    else visualizerLabel(mode),
+                                )
+                            },
+                            onClick = {
+                                onVisualizerSelected(mode.id)
+                                visualizerMenuOpen = false
+                            },
                         )
                     }
                 }
             }
         }
-        if (media != null) {
+
+        if (activeMedia != null) {
             MediaVisualSurface(
-                media, controller, visualizerMode, reducedMotion,
-                Modifier.fillMaxWidth().height(if (media.mediaType == "VIDEO") 245.dp else 280.dp).clip(RoundedCornerShape(28.dp)),
+                activeMedia,
+                controller,
+                visualizerMode,
+                reducedMotion,
+                Modifier
+                    .fillMaxWidth()
+                    .height(if (activeMedia.mediaType == "VIDEO") 245.dp else 280.dp)
+                    .clip(RoundedCornerShape(28.dp)),
             )
         }
-        Text(media?.title ?: "メディアを選択してください", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Text(media?.author?.takeIf(String::isNotBlank) ?: media?.provider.orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Slider(value = shownFraction, onValueChange = { seeking = true; fraction = it }, onValueChangeFinished = { controller?.seekTo((fraction * duration).toLong()); seeking = false }, enabled = controller != null && duration > 0L, modifier = Modifier.fillMaxWidth())
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(formatPlaybackTime(shownPosition)); Text(formatPlaybackTime(duration)) }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { controller?.seekToPreviousMediaItem() }, enabled = previous) { Text("⏮") }
-            TextButton(onClick = { controller?.seekTo(((controller?.currentPosition ?: 0L) - 10_000L).coerceAtLeast(0L)) }, enabled = controller != null) { Text("↶10") }
-            Button(onClick = { if (controller?.isPlaying == true) controller.pause() else { if (controller?.playbackState == Player.STATE_ENDED) controller.seekTo(0L); controller?.play() } }, enabled = controller != null, shape = CircleShape) { Text(if (playing) "❚❚" else "▶", style = MaterialTheme.typography.headlineSmall) }
-            TextButton(onClick = { controller?.seekTo(((controller?.currentPosition ?: 0L) + 10_000L).coerceAtMost(duration)) }, enabled = controller != null && duration > 0L) { Text("10↷") }
-            TextButton(onClick = { controller?.seekToNextMediaItem() }, enabled = next) { Text("⏭") }
+
+        Text(
+            activeMedia?.title ?: "メディアを選択してください",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            activeMedia?.author?.takeIf(String::isNotBlank) ?: activeMedia?.provider.orEmpty(),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Slider(
+            value = shownFraction,
+            onValueChange = {
+                seeking = true
+                fraction = it
+            },
+            onValueChangeFinished = {
+                controller?.seekTo((fraction * duration).toLong())
+                seeking = false
+            },
+            enabled = controller != null && duration > 0L,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(formatPlaybackTime(shownPosition))
+            Text(formatPlaybackTime(duration))
         }
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(
+                onClick = { controller?.seekToPreviousMediaItem() },
+                enabled = previous,
+            ) { Text("⏮") }
+            TextButton(
+                onClick = {
+                    controller?.seekTo(((controller.currentPosition) - 10_000L).coerceAtLeast(0L))
+                },
+                enabled = controller != null,
+            ) { Text("↶10") }
+            Button(
+                onClick = {
+                    if (controller?.isPlaying == true) {
+                        controller.pause()
+                    } else {
+                        if (controller?.playbackState == Player.STATE_ENDED) controller.seekTo(0L)
+                        controller?.play()
+                    }
+                },
+                enabled = controller != null,
+                shape = CircleShape,
+            ) {
+                Text(if (playing) "❚❚" else "▶", style = MaterialTheme.typography.headlineSmall)
+            }
+            TextButton(
+                onClick = {
+                    controller?.seekTo(((controller.currentPosition) + 10_000L).coerceAtMost(duration))
+                },
+                enabled = controller != null && duration > 0L,
+            ) { Text("10↷") }
+            TextButton(
+                onClick = { controller?.seekToNextMediaItem() },
+                enabled = next,
+            ) { Text("⏭") }
+        }
+
         TextButton(onClick = { optionsOpen = !optionsOpen }) {
             Text(if (optionsOpen) "再生オプションを閉じる" else "再生オプション")
         }
         if (optionsOpen) Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("再生オプション", fontWeight = FontWeight.Bold)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Box {
-                        TextButton(onClick = { speedMenuOpen = true }) { Text("速度 ${PlaybackSpeed.label(speed)}") }
-                        DropdownMenu(expanded = speedMenuOpen, onDismissRequest = { speedMenuOpen = false }) {
+                        TextButton(onClick = { speedMenuOpen = true }) {
+                            Text("速度 ${PlaybackSpeed.label(speed)}")
+                        }
+                        DropdownMenu(
+                            expanded = speedMenuOpen,
+                            onDismissRequest = { speedMenuOpen = false },
+                        ) {
                             PlaybackSpeed.allowed.forEach { value ->
-                                DropdownMenuItem(text = { Text(if (PlaybackSpeed.normalize(speed) == value) "✓ ${PlaybackSpeed.label(value)}" else PlaybackSpeed.label(value)) }, onClick = {
-                                    controller?.playbackParameters = PlaybackParameters(value)
-                                    speedMenuOpen = false
-                                })
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            if (PlaybackSpeed.normalize(speed) == value) {
+                                                "✓ ${PlaybackSpeed.label(value)}"
+                                            } else {
+                                                PlaybackSpeed.label(value)
+                                            },
+                                        )
+                                    },
+                                    onClick = {
+                                        controller?.playbackParameters = PlaybackParameters(value)
+                                        speedMenuOpen = false
+                                    },
+                                )
                             }
                         }
                     }
-                    TextButton(onClick = { controller?.repeatMode = nextRepeatMode(repeatMode).media3Mode }) { Text(repeatMode.label) }
-                    TextButton(onClick = { controller?.shuffleModeEnabled = toggledShuffleEnabled(shuffleEnabled) }) { Text(if (shuffleEnabled) "シャッフル ON" else "シャッフル OFF") }
+                    TextButton(
+                        onClick = { controller?.repeatMode = nextRepeatMode(repeatMode).media3Mode },
+                    ) { Text(repeatMode.label) }
+                    TextButton(
+                        onClick = { controller?.shuffleModeEnabled = toggledShuffleEnabled(shuffleEnabled) },
+                    ) {
+                        Text(if (shuffleEnabled) "シャッフル ON" else "シャッフル OFF")
+                    }
                 }
                 Text("A-B ループ", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextButton(onClick = {
-                        controller?.sendCustomCommand(SessionCommand(PlaybackCommand.SET_AB_A, android.os.Bundle.EMPTY), android.os.Bundle.EMPTY)
-                        abLoop = abLoop.setA(controller?.currentPosition ?: 0L)
-                    }, enabled = controller != null) { Text("Aを設定") }
-                    TextButton(onClick = {
-                        controller?.sendCustomCommand(SessionCommand(PlaybackCommand.SET_AB_B, android.os.Bundle.EMPTY), android.os.Bundle.EMPTY)
-                        abLoop = abLoop.setB(controller?.currentPosition ?: 0L)
-                    }, enabled = controller != null && abLoop.pointAMs != null) { Text("Bを設定") }
-                    TextButton(onClick = {
-                        controller?.sendCustomCommand(SessionCommand(PlaybackCommand.TOGGLE_AB, android.os.Bundle.EMPTY), android.os.Bundle.EMPTY)
-                        abLoop = abLoop.toggle()
-                    }, enabled = abLoop.isValid) { Text(if (abLoop.enabled) "ループ ON" else "ループ開始") }
-                    TextButton(onClick = {
-                        controller?.sendCustomCommand(SessionCommand(PlaybackCommand.CLEAR_AB, android.os.Bundle.EMPTY), android.os.Bundle.EMPTY)
-                        abLoop = abLoop.clear()
-                    }, enabled = abLoop.pointAMs != null) { Text("クリア") }
+                    TextButton(
+                        onClick = {
+                            controller?.sendCustomCommand(
+                                SessionCommand(PlaybackCommand.SET_AB_A, android.os.Bundle.EMPTY),
+                                android.os.Bundle.EMPTY,
+                            )
+                            abLoop = abLoop.setA(controller?.currentPosition ?: 0L)
+                        },
+                        enabled = controller != null,
+                    ) { Text("Aを設定") }
+                    TextButton(
+                        onClick = {
+                            controller?.sendCustomCommand(
+                                SessionCommand(PlaybackCommand.SET_AB_B, android.os.Bundle.EMPTY),
+                                android.os.Bundle.EMPTY,
+                            )
+                            abLoop = abLoop.setB(controller?.currentPosition ?: 0L)
+                        },
+                        enabled = controller != null && abLoop.pointAMs != null,
+                    ) { Text("Bを設定") }
+                    TextButton(
+                        onClick = {
+                            controller?.sendCustomCommand(
+                                SessionCommand(PlaybackCommand.TOGGLE_AB, android.os.Bundle.EMPTY),
+                                android.os.Bundle.EMPTY,
+                            )
+                            abLoop = abLoop.toggle()
+                        },
+                        enabled = abLoop.isValid,
+                    ) { Text(if (abLoop.enabled) "ループ ON" else "ループ開始") }
+                    TextButton(
+                        onClick = {
+                            controller?.sendCustomCommand(
+                                SessionCommand(PlaybackCommand.CLEAR_AB, android.os.Bundle.EMPTY),
+                                android.os.Bundle.EMPTY,
+                            )
+                            abLoop = abLoop.clear()
+                        },
+                        enabled = abLoop.pointAMs != null,
+                    ) { Text("クリア") }
                 }
-                Text(abLoopLabel(abLoop), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    abLoopLabel(abLoop),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
         }
+
         if (queueIndex >= 0 && queue.size > 1) Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("次に再生", fontWeight = FontWeight.Bold)
-                queue.drop(queueIndex + 1).take(2).forEach { Text(it.title, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                queue.drop(queueIndex + 1).take(2).forEach {
+                    Text(
+                        it.title,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }

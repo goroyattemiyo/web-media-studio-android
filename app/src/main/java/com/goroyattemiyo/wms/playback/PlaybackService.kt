@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import com.google.common.util.concurrent.Futures
 import org.json.JSONArray
+import kotlin.math.roundToInt
 
 class PlaybackService : MediaLibraryService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -38,6 +39,7 @@ class PlaybackService : MediaLibraryService() {
             field = value
             AbLoopStateBus.publish(value)
         }
+    private var appVolumeState = AppVolumeState()
 
     private val preferences by lazy { getSharedPreferences(PREFS_NAME, MODE_PRIVATE) }
     private val applicationRepository by lazy { (application as WmsApplication).mediaRepository }
@@ -100,6 +102,16 @@ class PlaybackService : MediaLibraryService() {
 
         override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
             persistPlayerOptions()
+        }
+
+        override fun onVolumeChanged(volume: Float) {
+            // Publish from the player callback so every UI reads the actual accepted player value.
+            appVolumeState = appVolumeState.withPercent((volume * 100f).roundToInt())
+            AppVolumeBus.publish(appVolumeState)
+            preferences.edit()
+                .putInt(KEY_WMS_VOLUME, appVolumeState.percent)
+                .putInt(KEY_WMS_LAST_AUDIBLE, appVolumeState.lastAudiblePercent)
+                .apply()
         }
     }
 
@@ -225,6 +237,11 @@ class PlaybackService : MediaLibraryService() {
         player.playbackParameters = PlaybackParameters(PlaybackSpeed.normalize(preferences.getFloat(KEY_SPEED, 1f)))
         player.repeatMode = RepeatOption.fromMedia3(preferences.getInt(KEY_REPEAT_MODE, Player.REPEAT_MODE_OFF)).media3Mode
         player.shuffleModeEnabled = preferences.getBoolean(KEY_SHUFFLE, false)
+        val savedVolume = preferences.getInt(KEY_WMS_VOLUME, 100).coerceIn(0, 100)
+        val lastAudible = preferences.getInt(KEY_WMS_LAST_AUDIBLE, 100).coerceIn(1, 100)
+        appVolumeState = AppVolumeState(savedVolume, lastAudible).withPercent(savedVolume)
+        AppVolumeBus.publish(appVolumeState)
+        player.volume = appVolumeState.percent / 100f
     }
 
     private fun persistPlayerOptions() {
@@ -276,6 +293,8 @@ class PlaybackService : MediaLibraryService() {
         const val KEY_SPEED = "speed"
         const val KEY_REPEAT_MODE = "repeat_mode"
         const val KEY_SHUFFLE = "shuffle"
+        const val KEY_WMS_VOLUME = "wms_volume_percent"
+        const val KEY_WMS_LAST_AUDIBLE = "wms_last_audible_percent"
         const val POSITION_PERSIST_INTERVAL_MS = 5_000L
         const val AB_LOOP_INTERVAL_MS = 200L
     }

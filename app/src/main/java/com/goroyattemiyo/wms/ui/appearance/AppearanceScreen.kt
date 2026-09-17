@@ -40,11 +40,15 @@ import com.goroyattemiyo.wms.ui.player.visualizer.VisualizerStaticPreview
 @Composable
 fun AppearanceScreen(
     settings: AppearanceSettings,
+    startupAnimationEnabled: Boolean,
+    startupSoundEnabled: Boolean,
     onBack: () -> Unit,
     onSkinSelected: (String) -> Unit,
     onBackgroundSelected: (String) -> Unit,
     onVisualizerSelected: (String) -> Unit,
     onReducedMotionChanged: (Boolean) -> Unit,
+    onStartupAnimationChanged: (Boolean) -> Unit,
+    onStartupSoundChanged: (Boolean) -> Unit,
     onChooseBackgroundImage: () -> Unit,
     onClearBackgroundImage: () -> Unit,
     onBackgroundBlurChanged: (Float) -> Unit,
@@ -65,6 +69,41 @@ fun AppearanceScreen(
             Text("Appearance", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Spacer(Modifier.width(64.dp))
         }
+
+        Text("Startup", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("起動アニメーション", fontWeight = FontWeight.Bold)
+                        Text(
+                            "WMSアイコンの起動演出を表示します。",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Switch(checked = startupAnimationEnabled, onCheckedChange = onStartupAnimationChanged)
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("起動サウンド", fontWeight = FontWeight.Bold)
+                        Text(
+                            "コールドスタート時にWMSソニックロゴを再生します。",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Switch(checked = startupSoundEnabled, onCheckedChange = onStartupSoundChanged)
+                }
+            }
+        }
+
         OutlinedButton(onClick = onChooseBackgroundImage, modifier = Modifier.fillMaxWidth()) {
             Text(if (settings.backgroundImagePath == null) "端末から背景画像を選ぶ" else "背景画像を変更")
         }

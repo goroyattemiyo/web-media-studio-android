@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import com.goroyattemiyo.wms.playback.AppVolumeBus
 import kotlin.math.roundToInt
@@ -30,6 +31,7 @@ import kotlin.math.roundToInt
 @Composable
 fun SoundScreen(controller: MediaController?) {
     val volume by AppVolumeBus.state.collectAsStateWithLifecycle()
+    val canSetVolume = controller?.isCommandAvailable(Player.COMMAND_SET_VOLUME) == true
     var sliderPercent by remember { mutableIntStateOf(volume.percent) }
     LaunchedEffect(volume.percent) { sliderPercent = volume.percent }
 
@@ -47,10 +49,8 @@ fun SoundScreen(controller: MediaController?) {
                 }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(
-                        onClick = {
-                            controller?.volume = volume.muteToggleTarget() / 100f
-                        },
-                        enabled = controller != null,
+                        onClick = { controller?.volume = volume.muteToggleTarget() / 100f },
+                        enabled = canSetVolume,
                     ) {
                         Text(if (volume.percent == 0) "ミュート解除" else "ミュート")
                     }
@@ -62,13 +62,13 @@ fun SoundScreen(controller: MediaController?) {
                             controller?.volume = next / 100f
                         },
                         valueRange = 0f..100f,
-                        enabled = controller != null,
+                        enabled = canSetVolume,
                         modifier = Modifier.weight(1f),
                     )
                 }
                 Text("100%＝原音量。端末やBluetooth機器の最大音量は変更しません。", style = MaterialTheme.typography.bodySmall)
-                if (controller == null) {
-                    Text("再生サービスに接続すると操作できます。", style = MaterialTheme.typography.bodySmall)
+                if (!canSetVolume) {
+                    Text("再生サービスに接続し、音量操作が許可されると使えます。", style = MaterialTheme.typography.bodySmall)
                 }
             }
         }

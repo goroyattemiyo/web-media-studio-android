@@ -43,6 +43,10 @@ data class AbLoopState(
     fun clear(): AbLoopState = AbLoopState()
 
     fun shouldLoopAt(positionMs: Long): Boolean = enabled && isValid && positionMs >= pointBMs!!
+
+    /** An explicit seek outside [A, B) takes priority over an active interval loop. */
+    fun afterManualSeek(positionMs: Long): AbLoopState =
+        if (enabled && isValid && (positionMs < pointAMs!! || positionMs >= pointBMs!!)) clear() else this
 }
 
 object PlaybackCommand {

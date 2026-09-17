@@ -1,96 +1,82 @@
-# WMS Android — Sound Control design (v0.1)
+# WMS Android — Sound Control design (v0.2)
 
 Date: 2026-09-17 JST
-Status: **Design proposal recorded / no implementation**
-Scope: WMS Android (`goroyattemiyo/web-media-studio-android`). Based on `plan/product-ui-redesign` at `3aaffa95479eaaffc05d99721e6bd6e9f3e2a145`. Keep the separate playback regression PR #7 independent. Do not merge to `main`, run GitHub Actions or release without approval.
+Status: **Design revision; boosted audio is NOT implemented or verified.**
+Scope: `goroyattemiyo/web-media-studio-android`. This is an independent design Draft PR #8, based on `plan/product-ui-redesign` at `3aaffa95479eaaffc05d99721e6bd6e9f3e2a145`. Playback regression PR #7 remains separate. Do not merge, run GitHub Actions, or publish a release without user approval.
 
-## 1. Agreed product direction
+## 1. Product requirement and limitations
 
-- Change the bottom navigation from **Home / Library / Player** to **Home / Library / Player / 音質** (Sound). Do not overload Now Playing with EQ controls.
-- The Sound tab contains WMS app volume, EQ ON/OFF, a **horizontal row of vertical EQ faders**, built-in presets and custom presets. Keep the existing mini-player visible on this tab; navigating to Sound must not interrupt playback.
-- Initial built-in preset catalog: **8 entries**: フラット, ジャズ, ロック, ポップス, クラシック, ボーカル, 低音重視, 高音重視.
-- Provide user-named **custom presets** (save as / select / rename / delete), not a fixed total of eight presets. No arbitrary small count limit, but validate names and handle storage limits gracefully. Built-ins are immutable.
-- These are WMS playback controls only, not controls for other apps, a Bluetooth volume-cap bypass, or a promise of amplified volume.
+- Add a fourth bottom tab: `Home / Library / Player / 音質` with volume, EQ, presets, and persistent mini-player; navigation must not interrupt playback.
+- **Revised user requirement:** audio may be too quiet when connected to a car/Bluetooth receiver, so WMS must offer an optional level ABOVE 100%, with digital clipping protection. Do not retain the former 'no boost' requirement.
+- Default sound remains 100% (unity), boost OFF. Never automatically start boosted playback after install, route change or device reconnection. Never change Android system volume or Bluetooth absolute-volume settings.
+- **No guarantee of distortion-free sound at arbitrary gain:** a limiter can reduce WMS-side digital clipping, but an already-distorted recording, intersample peaks, codec artifacts, car amplifier/speaker saturation, device output limits and OS/Bluetooth volume caps remain outside WMS's control. On loud masters a limiter may prevent any increase in perceived loudness. Avoid marketing the feature as a fix for all Bluetooth volume defects.
 
-## 2. User experience / layout
-
-```
-Sound Control (音質)
-  WMS音量                         80%
-  [mute]  ─────────●──────────  0–100%
-  イコライザー                  [ON/OFF]
-  プリセット [current ▼] [保存 / 名前を付けて保存]
-                +6 dB
-            │  │  │  │  │
-            │  │  │  │  │   vertical faders
-         0 ─┼──┼──┼──┼──┼─   clear zero reference
-            │  │  │  │  │
-                −6 dB
-           bass → treble
-  マイプリセット [select ▼] [rename] [delete]
-  [persistent mini-player]
-  [Home] [Library] [Player] [音質]
-```
-
-- Show the five-fader layout as a **design target**, not as an assertion that every phone provides five EQ hardware bands. Actual fader count, center frequencies and gain limits must reflect what the active effect reports; if fewer bands are available, use that smaller number rather than presenting fictitious independent controls. Keep the vertical layout on all supported devices.
-- Each fader displays its real center frequency and current dB gain. Center/zero marker, ± gain labels, touch targets and accessible numeric alternatives must be available; allow a reset-to-flat action.
-- Preset selection uses a compact dropdown/sheet, not eight permanently visible buttons. Separate built-in and My Presets sections. The tab shows the selected preset name; any manual fader edit changes the selected state to `カスタム（未保存）` without silently modifying a saved preset.
-- Save-as asks for a name; trim whitespace, reject empty names, duplicate names require explicit rename/overwrite choice, validate length (proposed 1–40 characters) and display persistence errors. Rename/delete need confirmation only when destructive, and deletion restores Flat or retains the current unsaved values with an explicit label (decide during UI review).
-- When there is no playing media, volume remains editable and persisted; EQ capability-dependent actions remain disabled or clearly labeled until an audio session is available. The mini-player appears whenever the current WMS navigation would ordinarily show it and media exists.
-
-## 3. Volume semantics
-
-- WMS volume range: 0–100%; map to Media3/ExoPlayer player-volume gain 0.0–1.0. **100% is unity**, not volume boost.
-- Initial WMS volume: 100%. Persist changes across track changes, app restart and service recreation.
-- Mute stores the last nonzero value and restores it on unmute; changing the slider from 0 un-mutes. A device/system volume change does not silently rewrite WMS volume.
-- Maintain normal Android volume controls, audio focus, noisy-audio handling and MediaSession notification/system transport buttons. Do not modify global device volume or hidden Bluetooth/absolute-volume settings.
-
-## 4. EQ capabilities and presets
-
-- Probe `android.media.audiofx.Equalizer` support on the player's audio session ID (nonzero/valid) and query actual band count, center frequencies, and level range at runtime. Verify required Media3 audio-session callbacks against the pinned Media3 version before implementation.
-- EQ defaults OFF with Flat selected; OFF must bypass the EQ and preserve chosen settings for re-enable. Selecting a preset explicitly may switch EQ ON (document in the UI). Set Flat to zero gain for all supported bands.
-- Eight built-ins are **logical sound profiles**, not a promise of universal dB results. Store a versioned frequency-to-gain profile rather than relying on device-specific preset IDs. On each device, map profile gains to supported bands by center frequency with clamping to the reported supported range. Any interpolation or clamping must be tested and documented; no unsupported band can be adjusted.
-- Preset reference shapes for sound review (five conceptual low → high points, in dB, **not yet acoustically validated**): Flat `[0,0,0,0,0]`; Jazz `[1,1,0,1,1]`; Rock `[3,1,-1,2,3]`; Pop `[1,2,1,2,1]`; Classical `[1,0,0,1,2]`; Vocal `[-2,0,3,2,1]`; Bass `[4,3,0,-1,-1]`; Treble `[-1,-1,0,3,4]`. Adapt to real supported ranges; confirm musical tuning and distortion risk on device before shipping.
-- Save custom presets as logical frequency/gain values plus schema version and user name; on a device with different hardware capabilities, remap and clamp rather than mislabel saved gains as identical physical results. Do not promise unlimited device storage.
-- Only affect WMS audio, including video audio when that session supports it. Do not install device-global effects. Support devices that report no EQ by showing a clear unsupported state while preserving playback, volume and saved presets.
-- Prevent clipping: avoid adding a >100% digital amplifier or positive preamp in initial scope; listen for clipping and reduce individual preset boosts if necessary. Include an obvious Flat/OFF escape route.
-
-## 5. Ownership / lifecycle
+## 2. UX and navigation
 
 ```
-Compose Sound tab + mini-player (UI)
-       ↕ commands and observed playback state
-MediaController / MediaSession
-       ↕
-PlaybackService — single authoritative owner
-       ├── volume and mute state
-       ├── EQ capability, enabled flag, band levels, preset selection
-       ├── lifecycle-bound EQ effect on current ExoPlayer audio session
-       └── persisted configuration (DataStore or established app preferences)
-ExoPlayer → audio output
+[Home] [Library] [Player] [音質]
+Sound Control
+  WMS volume: 0–100% normal / >100% BOOST region (experimental maximum 200%)
+  [mute]  ─────── 100% ─────── BOOST ─────── 200%
+  100% = original level; >100% = digital gain + safety limiter
+  [Boost enable: OFF by default] [Reset to 100%]
+  EQ [ON/OFF] [preset dropdown: built-in / My Presets]
+           +dB  │  │  │  │  │  vertical real-device faders
+             0 ─┼──┼──┼──┼──┼─
+           -dB  │  │  │  │  │
+  [Flat] [Save as] [Rename] [Delete]
+  [existing mini-player]
 ```
 
-- Avoid independent remembered UI truth: refresh controls from the service on connection and screen re-entry, and distribute changes to all UI surfaces. Validate MediaSession custom command availability and choose an observable state channel compatible with existing same-process architecture before coding.
-- On player audio-session change, detach/release the old effect and safely attach the new one. Release effects on service destruction and handle missing sessions and EQ initialization errors without terminating playback.
-- Confirm how the existing FFT visualizer/analysis renderer interacts with AudioEffects and session changes; preserve visuals and video playback. Avoid altering A-B, position, playlist or audio focus logic.
-- Version the persistence schema and write tests for serialization, preset migration, clamping, duplicate names and fallback behavior.
+- User-approved initial **8 immutable built-ins**: フラット, ジャズ, ロック, ポップス, クラシック, ボーカル, 低音重視, 高音重視. Named My Presets support save/select/rename/delete, sensible name validation, explicit overwrite confirmation and persistence error handling. User edits become `カスタム（未保存）` rather than silently modifying a saved profile.
+- Layout concept is five vertical faders left-to-right low→high, but actual displayed band count, frequency and dB limits MUST be derived from the device EQ effect; never show five imaginary independently working bands. Zero markers, actual center-frequency labels and accessible numeric adjustment required. EQ OFF or unsupported must be honestly indicated.
+- An explicit boost indicator and one-tap return to unity are required; clearly show when boost cannot operate. Do not represent the unimplemented feature with a functional-looking slider.
+- BOOST maximum 200% (+about 6 dB) is a **provisional engineering ceiling**, not a validated acoustic or loudness guarantee. Start device testing at a lower cap (for example 125–150%) and adjust downward based on clipping, limiter gain reduction, listening and route behavior. Review UI maximum only after tests.
 
-## 6. Roadmap, verification and gate conditions
+## 3. Volume model and ownership
 
-| Gate | Work | Acceptance |
+- Normal WMS level 0–100% maps to `MediaController`/ExoPlayer `volume` 0.0–1.0. 100% = unity; Media3 player volume is NOT an above-unity amplifier.
+- For a requested level above 100%, cap `player.volume` at 1.0 and apply *separate* controlled PCM gain and limiter in the playback pipeline. Do not pass `2.0f` to `player.volume` and assume it works.
+- Persist requested percentage, last audible volume, explicit boost permission and any limiter preference safely; distinguish **requested** gain from actually applied limiter gain and expose fallback status. Mute remembers and restores the last nonzero requested level, but boost must not unexpectedly reactivate after output route changes or service recreation. Prefer dropping to <=100% until the user explicitly re-enables boost on a new route.
+- Keep PlaybackService the authoritative state owner, with MediaSession commands and observable UI state. Activity, Sound tab and mini-player must not keep separate unvalidated state. The current `feat/sound-controls-local-s1` / Draft PR #9 is **only a 0–100% baseline**, not fulfillment of the revised >100% requirement.
+- Never change hardware system stream volume, force developer options, or override hearing-safety settings. A user-selectable enhancement affects WMS playback only.
+
+## 4. Gain + limiter DSP proposal and constraints
+
+- Integrate the gain/limiter into the existing Media3 PCM audio processor chain. Current `AnalysisRenderersFactory` installs `TeeAudioProcessor(analysisSink)` through `DefaultAudioSink.Builder.setAudioProcessors`; review relative processor order and whether FFT visualizers should observe the unboosted or post-processed signal.
+- Conceptual flow for PCM: decoded audio → EQ (when safely integrated) → smooth variable gain → peak/true-peak-aware limiter → output; the implementation must verify the real Android EQ effect's position. If an Android AudioEffect EQ operates AFTER the PCM limiter, it can reintroduce clipping. Until ordering/headroom is verified, disable simultaneous boost+positive EQ gains or apply a conservative reduction; never claim the limiter protects a later unknown stage.
+- Prototype a fast-attack, controlled-release or limited-lookahead limiter with output ceiling below full-scale (candidate -1 dBFS), smooth gain changes and explicit saturation counters/gain-reduction telemetry. An instantaneous hard clip is NOT acceptable as a substitute. The candidate ceiling does not guarantee true-peak safety or downstream distortion freedom; test intersample peaks and codec/route effects.
+- Process PCM without changing number of samples or timeline. Validate 16-bit and float PCM, mono/stereo, format changes, seek/pause/resume, playback speed, queue transitions, video sync and CPU/battery overhead. Avoid allocation/blocking on the audio render thread.
+- Media3 audio processors work with PCM, not audio passthrough/offload. When boost is enabled, deliberately require a PCM processing route or visibly disable boost for unsupported output; avoid silently skipping the limiter. Preserve existing playback and visualizers if audio effect initialization fails, falling back to safe unity.
+- Evaluate Android AudioEffect Equalizer session lifecycle and DSP order jointly with the limiter. Clean up effect on audio session changes/service stop. Device EQ presets have hardware-dependent bands, so save WMS logical frequency-to-dB profiles and remap/clamp rather than relying on device preset IDs.
+
+Official API references (verified September 2026):
+- `DefaultAudioSink.Builder#setAudioProcessors` and `setAudioProcessorChain`: https://developer.android.com/reference/androidx/media3/exoplayer/audio/DefaultAudioSink.Builder
+- `DefaultAudioSink#setVolume` recommends 0.0–1.0: https://developer.android.com/reference/androidx/media3/exoplayer/audio/DefaultAudioSink
+- Android Bluetooth absolute volume documentation: https://source.android.com/docs/core/connect/bluetooth/services
+
+## 5. EQ and presets
+
+- Probe Equalizer support and actual band count, center frequencies, valid band gain range against the current nonzero audio session. Fail gracefully (EQ unsupported, playback unaffected). Query actual Media3 callback APIs for pinned version before coding.
+- EQ defaults OFF and Flat; built-in settings are *reference shapes*, not measured acoustic guarantees. Suggested five conceptual dB points for sound review: Flat `[0,0,0,0,0]`, Jazz `[1,1,0,1,1]`, Rock `[3,1,-1,2,3]`, Pop `[1,2,1,2,1]`, Classical `[1,0,0,1,2]`, Vocal `[-2,0,3,2,1]`, Bass `[4,3,0,-1,-1]`, Treble `[-1,-1,0,3,4]`. Clamp and validate on device before shipping.
+- Custom named presets are local, versioned logical profiles; validate length (candidate 1–40 characters), uniqueness and delete/overwrite confirmation; preserve unsaved state. No arbitrary fixed count, but never promise infinite storage.
+- Verify EQ combined with booster, avoiding gain stacking that bypasses safety limiter. Until verified, boosted and positively boosted-EQ modes are mutually exclusive.
+
+## 6. Roadmap / gates
+
+| Gate | Scope | Required acceptance |
 |---|---|---|
-| S0 | Capability spike, inspect Media3 session/volume API and actual device EQ information | Document session ID, band count, gain range, supported routes, known limits; no playback regression |
-| S1 | 4th bottom tab + persisted app volume/mute | Full/mini/Sound state agrees; 0/100 and mute restore; track change, screen off and restart preserve intended values |
-| S2 | EQ ON/OFF + vertical actual-band UI + Flat | Service-owned state, safely attached/released effect; unsupported device continues playing |
-| S3 | 8 built-ins + custom save/select/rename/delete | No accidental overwrite; persistence/restart/mapping/clamping and manual-edit unsaved state tested |
-| S4 | Physical route and regression testing | Device speaker, wired if available, Bluetooth; MP3/video, seek beyond 19s, A-B, Next/Previous, screen-off/background, notification, FFT visualizer |
+| S0 | Baseline + route diagnosis | Compare WMS 100%/EQ OFF with a known-good player, Android and receiver volume, Bluetooth absolute-volume status; identify if DSP can actually help. |
+| S1 | Existing PR #9 normal volume | 4th Sound tab, 0–100%, mute, persistence, mini-player; local build/unit/lint and real device PASS. This gate does **not** satisfy >100%. |
+| S1B | Optional boost + limiter | Tested Media3 PCM chain, controlled up-to-provisional-200% UI, hard technical safety fallback, smooth changes and telemetry; compare quiet/loud MP3 and car Bluetooth for actual benefit, artifacts, distortion, latency and power. |
+| S2 | Device-aware EQ | ON/OFF, correct band count/frequencies and vertical faders; reliable lifecycle; boost/EQ combined path safe or explicitly disallowed. |
+| S3 | Presets | 8 built-ins plus My Presets, persistence/migration and clipping checks. |
+| S4 | Regression and release gate | Device speaker, wired if available, Bluetooth; MP3/video, 19s seek, A-B, Next/Previous, screen-off/background, notification, FFT visualizer, changes in route. User acceptance. |
 
-Verification workflow: static review → PS local unit tests/lint/debug build (`.\scripts\local-verify.ps1 -Install`) → real-device tests → user acceptance. Prefer Draft PR, keep heavy GitHub Actions off during iterative development, do not merge into `plan/product-ui-redesign`/`main` or release without explicit approval. All instructions and commands given to the user should be PowerShell.
+Use PS-only local flow: static review → `./scripts/local-verify.ps1 -Install` (PowerShell) → device checks. Draft PRs throughout, no heavyweight GitHub Actions during iteration, no merge to `plan/product-ui-redesign` or `main`, and no release without explicit user approval.
 
-## 7. Explicitly out of scope / pending decisions
+## 7. Current status / non-goals
 
-- No claim that WMS volume or EQ fixes an Android/Xiaomi/Bluetooth hardware or system-level volume defect. Diagnose independently by comparing WMS 100%/Flat/OFF against another player and the device's own volume; note connected-device volume and Bluetooth absolute-volume interactions.
-- No system-wide EQ, root patch, hidden settings modification, sound boost above unity or hearing-safety override.
-- Before coding, confirm actual UI width and accessibility for variable band counts, exact storage solution, error strings, cross-process expectations and whether saved custom profiles should sync/export (initial scope: device-local only).
-
-No runtime behavior is changed by this document. PR #7's 19-second seek fix remains a separate Draft pending its own acceptance checks.
+- This file is the revised **design only**. Existing Draft PR #9 includes S1 baseline but **does not** amplify >100%, implement a limiter or implement EQ/presets. Do not tell the user that installing PR #9 solves their quiet car Bluetooth problem.
+- User's actual car Bluetooth level/route has not yet been measured; no assurance WMS-side amplification will overcome a hardware or OS cap. Examine Android audio routes independently without root, hidden-settings patches or automatic modifications.
+- Preserve Preview 1 tag/assets and independent regression Draft PR #7. Keep each feature's tests and acceptance explicit.

@@ -2,6 +2,7 @@ package com.goroyattemiyo.wms
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -21,6 +22,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
 import com.goroyattemiyo.wms.appearance.AppearanceSettings
@@ -41,8 +43,13 @@ import com.goroyattemiyo.wms.ui.playback.PlaybackRequest
 import com.goroyattemiyo.wms.ui.playback.SavedMiniPlayer
 import com.goroyattemiyo.wms.ui.playback.rememberPlaybackController
 import com.goroyattemiyo.wms.ui.player.NowPlayingScreen
+import com.goroyattemiyo.wms.ui.startup.StartupExperiencePreferences
+import com.goroyattemiyo.wms.ui.startup.StartupExperienceScreen
+import com.goroyattemiyo.wms.ui.startup.StartupExperienceSession
+import com.goroyattemiyo.wms.ui.startup.StartupSonicLogo
 import com.goroyattemiyo.wms.ui.theme.WmsTheme
 import java.io.File
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     private val acquisitionViewModel by viewModels<GateA0ViewModel>()
@@ -93,6 +100,7 @@ private fun WmsRoot(
     appearance: AppearanceSettings,
     appearanceViewModel: AppearanceViewModel,
 ) {
+    val context = LocalContext.current
     val acquisitionState by acquisitionViewModel.uiState.collectAsStateWithLifecycle()
     val searchState by searchViewModel.uiState.collectAsStateWithLifecycle()
     val libraryMedia by libraryViewModel.media.collectAsStateWithLifecycle()
@@ -114,6 +122,18 @@ private fun WmsRoot(
     var importPlaylistId by remember { mutableStateOf<String?>(null) }
     var initializedImportUrl by remember { mutableStateOf<String?>(null) }
 
+    val coldStart = remember { StartupExperienceSession.consumeColdStart() }
+    val startupStartedAtMs = remember { SystemClock.elapsedRealtime() }
+    var startupAnimationEnabled by remember {
+        mutableStateOf(StartupExperiencePreferences.animationEnabled(context))
+    }
+    var startupSoundEnabled by remember {
+        mutableStateOf(StartupExperiencePreferences.soundEnabled(context))
+    }
+    var startupVisible by remember {
+        mutableStateOf(coldStart && startupAnimationEnabled)
+    }
+
     val selectedMedia = libraryMedia.firstOrNull { it.id == selectedMediaId }
         ?: libraryMedia.firstOrNull()
     val playbackController = rememberPlaybackController()
@@ -122,6 +142,26 @@ private fun WmsRoot(
     }
     val backgroundImagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let(appearanceViewModel::importBackgroundImage)
+    }
+
+    LaunchedEffect(coldStart, startupSoundEnabled) {
+        if (coldStart && startupSoundEnabled) {
+            StartupSonicLogo.playIfAllowed(context)
+        }
+    }
+
+    LaunchedEffect(startupVisible, acquisitionState.engineCode) {
+        if (!startupVisible) return@LaunchedEffect
+        if (acquisitionState.engineCode != "STARTING") {
+            val elapsedMs = SystemClock.elapsedRealtime() - startupStartedAtMs
+            val remainingMs = (MIN_STARTUP_EXPERIENCE_MS - elapsedMs).coerceAtLeast(0L)
+            if (remainingMs > 0L) delay(remainingMs)
+            startupVisible = false
+        }
+    }
+
+    LaunchedEffect(startupAnimationEnabled) {
+        if (!startupAnimationEnabled) startupVisible = false
     }
 
     fun requestPlayback(media: MediaEntity, queue: List<MediaEntity>) {
@@ -225,136 +265,161 @@ private fun WmsRoot(
         }
     }
 
+    val startupStatus = when {
+        acquisitionState.engineCode == "STARTING" -> "PREPARING MEDIA ENGINE"
+        acquisitionState.updatingYtdlp -> "CHECKING MEDIA ENGINE"
+        else -> "OPENING WMS"
+    }
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = androidx.compose.ui.graphics.Color.Transparent,
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            Box(modifier = Modifier.weight(1f)) {
-                if (appearanceOpen) {
-                    AppearanceScreen(
-                        settings = appearance,
-                        onBack = { appearanceOpen = false },
-                        onSkinSelected = appearanceViewModel::selectSkin,
-                        onBackgroundSelected = appearanceViewModel::selectBackground,
-                        onVisualizerSelected = appearanceViewModel::selectVisualizer,
-                        onReducedMotionChanged = appearanceViewModel::setReducedMotion,
-                        onChooseBackgroundImage = { backgroundImagePicker.launch(arrayOf("image/*")) },
-                        onClearBackgroundImage = appearanceViewModel::clearBackgroundImage,
-                        onBackgroundBlurChanged = appearanceViewModel::setBackgroundBlur,
-                    )
-                } else when (selectedTab) {
-                    AppTab.HOME -> SearchHome(
-                        acquisitionState = acquisitionState,
-                        searchState = searchState,
-                        searchText = searchText,
-                        onSearchTextChanged = {
-                            searchText = it
-                            searchViewModel.clearError()
-                        },
-                        onSubmit = {
-                            val value = searchText.trim()
-                            if (value.isNotBlank()) {
-                                if (isDirectUrl(value)) {
-                                    acquisitionViewModel.onUrlChanged(value)
-                                    importOpen = true
-                                } else {
-                                    searchViewModel.search(value)
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Box(modifier = Modifier.weight(1f)) {
+                    if (appearanceOpen) {
+                        AppearanceScreen(
+                            settings = appearance,
+                            startupAnimationEnabled = startupAnimationEnabled,
+                            startupSoundEnabled = startupSoundEnabled,
+                            onBack = { appearanceOpen = false },
+                            onSkinSelected = appearanceViewModel::selectSkin,
+                            onBackgroundSelected = appearanceViewModel::selectBackground,
+                            onVisualizerSelected = appearanceViewModel::selectVisualizer,
+                            onReducedMotionChanged = appearanceViewModel::setReducedMotion,
+                            onStartupAnimationChanged = { enabled ->
+                                startupAnimationEnabled = enabled
+                                StartupExperiencePreferences.setAnimationEnabled(context, enabled)
+                            },
+                            onStartupSoundChanged = { enabled ->
+                                startupSoundEnabled = enabled
+                                StartupExperiencePreferences.setSoundEnabled(context, enabled)
+                            },
+                            onChooseBackgroundImage = { backgroundImagePicker.launch(arrayOf("image/*")) },
+                            onClearBackgroundImage = appearanceViewModel::clearBackgroundImage,
+                            onBackgroundBlurChanged = appearanceViewModel::setBackgroundBlur,
+                        )
+                    } else when (selectedTab) {
+                        AppTab.HOME -> SearchHome(
+                            acquisitionState = acquisitionState,
+                            searchState = searchState,
+                            searchText = searchText,
+                            onSearchTextChanged = {
+                                searchText = it
+                                searchViewModel.clearError()
+                            },
+                            onSubmit = {
+                                val value = searchText.trim()
+                                if (value.isNotBlank()) {
+                                    if (isDirectUrl(value)) {
+                                        acquisitionViewModel.onUrlChanged(value)
+                                        importOpen = true
+                                    } else {
+                                        searchViewModel.search(value)
+                                    }
                                 }
-                            }
-                        },
-                        onImportResult = { item ->
-                            acquisitionViewModel.onUrlChanged(item.url)
-                            importOpen = true
-                        },
-                        onOpenDeveloper = { developerOpen = !developerOpen },
-                        onOpenAppearance = { appearanceOpen = true },
-                        developerOpen = developerOpen,
-                        recentMedia = libraryMedia.take(3),
-                        libraryCount = libraryMedia.size,
-                        onPlayRecent = { media ->
-                            playlistViewModel.selectPlaylist(null)
-                            libraryViewModel.select(media)
-                            requestPlayback(media, libraryMedia)
-                        },
-                        currentMedia = selectedMedia,
-                        skinName = appearance.skin.displayName,
-                        appVersion = BuildConfig.VERSION_NAME,
-                        playbackController = playbackController,
-                        visualizerMode = if (appearance.reducedMotion) {
-                            VisualizerMode.MINIMAL
-                        } else {
-                            appearance.visualizer
-                        },
-                        reducedMotion = appearance.reducedMotion,
-                        onOpenPlayer = { navigateTo(AppTab.PLAYER) },
-                        onChooseDeviceMedia = { documentPicker.launch(arrayOf("audio/*", "video/*")) },
-                    )
-                    AppTab.LIBRARY -> LibraryScreen(
-                        media = libraryMedia,
-                        selectedMediaId = selectedMedia?.id,
-                        errorMessage = libraryError,
-                        onPlay = { media ->
-                            playlistViewModel.selectPlaylist(null)
-                            libraryViewModel.select(media)
-                            requestPlayback(media, libraryMedia)
-                        },
-                        onDelete = libraryViewModel::delete,
-                        onClearError = libraryViewModel::clearError,
-                        playlists = playlists,
-                        selectedPlaylistId = selectedPlaylistId,
-                        playlistItems = playlistItems,
-                        playlistError = playlistError,
-                        onSelectPlaylist = playlistViewModel::selectPlaylist,
-                        onCreate = playlistViewModel::create,
-                        onRename = playlistViewModel::rename,
-                        onDeletePlaylist = playlistViewModel::delete,
-                        onAddMedia = playlistViewModel::addMedia,
-                        onRemoveMedia = playlistViewModel::removeMedia,
-                        onMoveMedia = playlistViewModel::moveMedia,
-                        onPlayPlaylist = { media ->
-                            libraryViewModel.select(media)
-                            requestPlayback(media, playlistItems.map { it.media })
-                        },
-                        onClearPlaylistError = playlistViewModel::clearError,
-                    )
-                    AppTab.PLAYER -> NowPlayingScreen(
-                        media = selectedMedia,
-                        queue = playbackQueue.ifEmpty {
-                            if (selectedPlaylistId != null) playlistItems.map { it.media } else libraryMedia
-                        },
-                        onBack = { selectedTab = lastContentTab },
-                        visualizerMode = if (appearance.reducedMotion) {
-                            VisualizerMode.MINIMAL
-                        } else {
-                            appearance.visualizer
-                        },
-                        reducedMotion = appearance.reducedMotion,
-                        onVisualizerSelected = appearanceViewModel::selectVisualizer,
-                        controller = playbackController,
+                            },
+                            onImportResult = { item ->
+                                acquisitionViewModel.onUrlChanged(item.url)
+                                importOpen = true
+                            },
+                            onOpenDeveloper = { developerOpen = !developerOpen },
+                            onOpenAppearance = { appearanceOpen = true },
+                            developerOpen = developerOpen,
+                            recentMedia = libraryMedia.take(3),
+                            libraryCount = libraryMedia.size,
+                            onPlayRecent = { media ->
+                                playlistViewModel.selectPlaylist(null)
+                                libraryViewModel.select(media)
+                                requestPlayback(media, libraryMedia)
+                            },
+                            currentMedia = selectedMedia,
+                            skinName = appearance.skin.displayName,
+                            appVersion = BuildConfig.VERSION_NAME,
+                            playbackController = playbackController,
+                            visualizerMode = if (appearance.reducedMotion) {
+                                VisualizerMode.MINIMAL
+                            } else {
+                                appearance.visualizer
+                            },
+                            reducedMotion = appearance.reducedMotion,
+                            onOpenPlayer = { navigateTo(AppTab.PLAYER) },
+                            onChooseDeviceMedia = { documentPicker.launch(arrayOf("audio/*", "video/*")) },
+                        )
+                        AppTab.LIBRARY -> LibraryScreen(
+                            media = libraryMedia,
+                            selectedMediaId = selectedMedia?.id,
+                            errorMessage = libraryError,
+                            onPlay = { media ->
+                                playlistViewModel.selectPlaylist(null)
+                                libraryViewModel.select(media)
+                                requestPlayback(media, libraryMedia)
+                            },
+                            onDelete = libraryViewModel::delete,
+                            onClearError = libraryViewModel::clearError,
+                            playlists = playlists,
+                            selectedPlaylistId = selectedPlaylistId,
+                            playlistItems = playlistItems,
+                            playlistError = playlistError,
+                            onSelectPlaylist = playlistViewModel::selectPlaylist,
+                            onCreate = playlistViewModel::create,
+                            onRename = playlistViewModel::rename,
+                            onDeletePlaylist = playlistViewModel::delete,
+                            onAddMedia = playlistViewModel::addMedia,
+                            onRemoveMedia = playlistViewModel::removeMedia,
+                            onMoveMedia = playlistViewModel::moveMedia,
+                            onPlayPlaylist = { media ->
+                                libraryViewModel.select(media)
+                                requestPlayback(media, playlistItems.map { it.media })
+                            },
+                            onClearPlaylistError = playlistViewModel::clearError,
+                        )
+                        AppTab.PLAYER -> NowPlayingScreen(
+                            media = selectedMedia,
+                            queue = playbackQueue.ifEmpty {
+                                if (selectedPlaylistId != null) playlistItems.map { it.media } else libraryMedia
+                            },
+                            onBack = { selectedTab = lastContentTab },
+                            visualizerMode = if (appearance.reducedMotion) {
+                                VisualizerMode.MINIMAL
+                            } else {
+                                appearance.visualizer
+                            },
+                            reducedMotion = appearance.reducedMotion,
+                            onVisualizerSelected = appearanceViewModel::selectVisualizer,
+                            controller = playbackController,
+                        )
+                    }
+                }
+
+                if (!appearanceOpen) {
+                    if (selectedTab != AppTab.PLAYER) {
+                        selectedMedia?.let { media ->
+                            SavedMiniPlayer(
+                                controller = playbackController,
+                                media = media,
+                                onPositionChanged = { positionMs ->
+                                    libraryViewModel.savePosition(media.id, positionMs)
+                                },
+                                onMediaTransition = { mediaId ->
+                                    libraryMedia.firstOrNull { it.id == mediaId }?.let(libraryViewModel::select)
+                                },
+                                onOpenNowPlaying = { navigateTo(AppTab.PLAYER) },
+                            )
+                        }
+                    }
+                    BottomNavigation(
+                        selectedTab = selectedTab,
+                        onSelect = ::navigateTo,
                     )
                 }
             }
 
-            if (!appearanceOpen) {
-                if (selectedTab != AppTab.PLAYER) {
-                    selectedMedia?.let { media ->
-                        SavedMiniPlayer(
-                            controller = playbackController,
-                            media = media,
-                            onPositionChanged = { positionMs ->
-                                libraryViewModel.savePosition(media.id, positionMs)
-                            },
-                            onMediaTransition = { mediaId ->
-                                libraryMedia.firstOrNull { it.id == mediaId }?.let(libraryViewModel::select)
-                            },
-                            onOpenNowPlaying = { navigateTo(AppTab.PLAYER) },
-                        )
-                    }
-                }
-                BottomNavigation(
-                    selectedTab = selectedTab,
-                    onSelect = ::navigateTo,
+            if (startupVisible) {
+                StartupExperienceScreen(
+                    statusText = startupStatus,
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
         }
@@ -384,3 +449,5 @@ private fun WmsRoot(
         )
     }
 }
+
+private const val MIN_STARTUP_EXPERIENCE_MS = 1_350L

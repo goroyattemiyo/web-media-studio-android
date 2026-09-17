@@ -53,4 +53,20 @@ class PlaybackOptionsTest {
         assertEquals(null, reset.pointBMs)
         assertFalse(reset.enabled)
     }
+
+    @Test
+    fun seekingOutsideActiveAbLoopRespectsRequestedPosition() {
+        val active = AbLoopState().setA(19_000L).setB(60_000L).toggle()
+        assertEquals(active, active.afterManualSeek(19_000L))
+        assertEquals(active, active.afterManualSeek(59_999L))
+        assertEquals(AbLoopState(), active.afterManualSeek(18_999L))
+        assertEquals(AbLoopState(), active.afterManualSeek(60_000L))
+        assertEquals(AbLoopState(), active.afterManualSeek(120_000L))
+    }
+
+    @Test
+    fun manualSeekDoesNotClearInactiveAbRange() {
+        val inactive = AbLoopState().setA(19_000L).setB(60_000L)
+        assertEquals(inactive, inactive.afterManualSeek(120_000L))
+    }
 }

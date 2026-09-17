@@ -2,9 +2,11 @@ package com.goroyattemiyo.wms.ui.startup
 
 import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -23,14 +25,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -39,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import com.goroyattemiyo.wms.R
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.sin
 import kotlin.math.tanh
@@ -87,11 +95,10 @@ object StartupSonicLogo {
         val audioManager = appContext.getSystemService(AudioManager::class.java) ?: return
         if (audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) <= 0) return
         if (audioManager.ringerMode == AudioManager.RINGER_MODE_SILENT) return
-        if (audioManager.isMusicActive) return
 
         Thread(
             {
-                runCatching { playPcm() }
+                runCatching { playPcm(audioManager) }
             },
             "wms-startup-sonic-logo",
         ).apply {
@@ -100,15 +107,20 @@ object StartupSonicLogo {
         }
     }
 
-    private fun playPcm() {
+    private fun playPcm(audioManager: AudioManager) {
+        val attributes = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_MEDIA)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+        val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+            .setAudioAttributes(attributes)
+            .setOnAudioFocusChangeListener { }
+            .build()
+        val focusGranted = audioManager.requestAudioFocus(focusRequest) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+
         val pcm = renderPcm()
         val track = AudioTrack.Builder()
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .build(),
-            )
+            .setAudioAttributes(attributes)
             .setAudioFormat(
                 AudioFormat.Builder()
                     .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
@@ -123,12 +135,15 @@ object StartupSonicLogo {
         try {
             if (track.state != AudioTrack.STATE_INITIALIZED) return
             track.write(pcm, 0, pcm.size, AudioTrack.WRITE_BLOCKING)
-            track.setVolume(0.34f)
+            track.setVolume(0.72f)
             track.play()
-            Thread.sleep(DURATION_MS + 120L)
+            Thread.sleep(DURATION_MS + 140L)
         } finally {
             runCatching { track.stop() }
             track.release()
+            if (focusGranted) {
+                audioManager.abandonAudioFocusRequest(focusRequest)
+            }
         }
     }
 
@@ -139,39 +154,39 @@ object StartupSonicLogo {
 
         repeat(frames) { frame ->
             val t = frame.toDouble() / SAMPLE_RATE.toDouble()
-            val masterFade = smoothAttack(t, 0.025) * smoothRelease(t, DURATION_SECONDS, 0.42)
+            val masterFade = smoothAttack(t, 0.018) * smoothRelease(t, DURATION_SECONDS, 0.36)
 
-            val lowEnvelope = smoothAttack(t, 0.035) * exp(-t * 1.45)
+            val lowEnvelope = smoothAttack(t, 0.025) * exp(-t * 1.18)
             val low = (
-                sin(twoPi * 55.0 * t) +
-                    0.34 * sin(twoPi * 110.0 * t + 0.2)
+                sin(twoPi * 52.0 * t) +
+                    0.46 * sin(twoPi * 104.0 * t + 0.18)
                 ) * lowEnvelope
 
-            val bloomTime = (t - 0.32).coerceAtLeast(0.0)
-            val bloomEnvelope = if (t < 0.32) 0.0 else smoothAttack(bloomTime, 0.34) * exp(-bloomTime * 0.48)
+            val bloomTime = (t - 0.24).coerceAtLeast(0.0)
+            val bloomEnvelope = if (t < 0.24) 0.0 else smoothAttack(bloomTime, 0.22) * exp(-bloomTime * 0.40)
             val leftBloom = (
-                0.70 * sin(twoPi * 220.0 * t) +
-                    0.44 * sin(twoPi * 277.18 * t + 0.24) +
-                    0.30 * sin(twoPi * 329.63 * t + 0.48)
+                0.74 * sin(twoPi * 196.0 * t) +
+                    0.52 * sin(twoPi * 246.94 * t + 0.20) +
+                    0.34 * sin(twoPi * 293.66 * t + 0.46)
                 ) * bloomEnvelope
             val rightBloom = (
-                0.70 * sin(twoPi * 220.0 * t + 0.12) +
-                    0.44 * sin(twoPi * 277.18 * t + 0.42) +
-                    0.30 * sin(twoPi * 329.63 * t + 0.65)
+                0.74 * sin(twoPi * 196.0 * t + 0.10) +
+                    0.52 * sin(twoPi * 246.94 * t + 0.38) +
+                    0.34 * sin(twoPi * 293.66 * t + 0.66)
                 ) * bloomEnvelope
 
-            val shimmerTime = (t - 1.18).coerceAtLeast(0.0)
-            val shimmerEnvelope = if (t < 1.18) 0.0 else smoothAttack(shimmerTime, 0.045) * exp(-shimmerTime * 2.25)
-            val shimmerPhase = twoPi * (680.0 * shimmerTime + 150.0 * shimmerTime * shimmerTime)
+            val shimmerTime = (t - 1.02).coerceAtLeast(0.0)
+            val shimmerEnvelope = if (t < 1.02) 0.0 else smoothAttack(shimmerTime, 0.035) * exp(-shimmerTime * 1.82)
+            val shimmerPhase = twoPi * (760.0 * shimmerTime + 185.0 * shimmerTime * shimmerTime)
             val leftShimmer = (
-                sin(shimmerPhase) + 0.38 * sin(twoPi * 1_020.0 * shimmerTime + 0.3)
+                sin(shimmerPhase) + 0.42 * sin(twoPi * 1_180.0 * shimmerTime + 0.28)
                 ) * shimmerEnvelope
             val rightShimmer = (
-                sin(shimmerPhase + 0.26) + 0.38 * sin(twoPi * 1_020.0 * shimmerTime + 0.62)
+                sin(shimmerPhase + 0.24) + 0.42 * sin(twoPi * 1_180.0 * shimmerTime + 0.64)
                 ) * shimmerEnvelope
 
-            val left = masterFade * (0.62 * low + 0.34 * leftBloom + 0.18 * leftShimmer)
-            val right = masterFade * (0.62 * low + 0.34 * rightBloom + 0.18 * rightShimmer)
+            val left = masterFade * (0.72 * low + 0.42 * leftBloom + 0.24 * leftShimmer)
+            val right = masterFade * (0.72 * low + 0.42 * rightBloom + 0.24 * rightShimmer)
 
             output[frame * 2] = toPcm16(left)
             output[frame * 2 + 1] = toPcm16(right)
@@ -186,7 +201,7 @@ object StartupSonicLogo {
         ((end - t) / duration).coerceIn(0.0, 1.0).let { it * it * (3.0 - 2.0 * it) }
 
     private fun toPcm16(value: Double): Short =
-        (tanh(value * 1.35) * Short.MAX_VALUE * 0.82)
+        (tanh(value * 1.30) * Short.MAX_VALUE * 0.88)
             .toInt()
             .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
             .toShort()
@@ -197,39 +212,56 @@ fun StartupExperienceScreen(
     statusText: String,
     modifier: Modifier = Modifier,
 ) {
+    val entrance = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        entrance.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(720, easing = FastOutSlowInEasing),
+        )
+    }
+
     val transition = rememberInfiniteTransition(label = "wms-startup")
-    val pulse by transition.animateFloat(
-        initialValue = 0.94f,
-        targetValue = 1.045f,
+    val breathe by transition.animateFloat(
+        initialValue = 0.985f,
+        targetValue = 1.018f,
         animationSpec = infiniteRepeatable(
-            animation = tween(980, easing = FastOutSlowInEasing),
+            animation = tween(1_150, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse,
         ),
-        label = "logo-pulse",
+        label = "logo-breathe",
     )
-    val tilt by transition.animateFloat(
-        initialValue = -2.3f,
-        targetValue = 2.3f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1_450, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "logo-tilt",
-    )
-    val ringProgress by transition.animateFloat(
+    val orbitRotation by transition.animateFloat(
         initialValue = 0f,
-        targetValue = 1f,
+        targetValue = 360f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1_600, easing = LinearEasing),
+            animation = tween(2_200, easing = LinearEasing),
             repeatMode = RepeatMode.Restart,
         ),
-        label = "ring-wave",
+        label = "orbit-rotation",
     )
-    val loadingAlpha by transition.animateFloat(
-        initialValue = 0.42f,
+    val counterRotation by transition.animateFloat(
+        initialValue = 360f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(4_200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "counter-rotation",
+    )
+    val glowPulse by transition.animateFloat(
+        initialValue = 0.56f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(720, easing = FastOutSlowInEasing),
+            animation = tween(850, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "glow-pulse",
+    )
+    val loadingAlpha by transition.animateFloat(
+        initialValue = 0.50f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(680, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse,
         ),
         label = "loading-alpha",
@@ -250,19 +282,72 @@ fun StartupExperienceScreen(
             ),
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(modifier = Modifier.size(300.dp)) {
-            repeat(3) { index ->
-                val local = (ringProgress + index * 0.31f) % 1f
-                val radius = size.minDimension * (0.20f + local * 0.28f)
-                val alpha = (1f - local) * (0.22f - index * 0.035f)
-                drawCircle(
-                    color = when (index) {
-                        0 -> cyan
-                        1 -> blue
-                        else -> purple
-                    }.copy(alpha = alpha.coerceAtLeast(0f)),
-                    radius = radius,
-                    style = Stroke(width = 2.2f + (1f - local) * 3.2f, cap = StrokeCap.Round),
+        Canvas(modifier = Modifier.size(330.dp)) {
+            val center = this.center
+            val baseRadius = size.minDimension * 0.31f
+
+            drawCircle(
+                color = cyan.copy(alpha = 0.07f + 0.06f * glowPulse),
+                radius = baseRadius * 1.27f,
+            )
+            drawCircle(
+                color = purple.copy(alpha = 0.08f + 0.05f * glowPulse),
+                radius = baseRadius * 1.07f,
+            )
+
+            rotate(orbitRotation, pivot = center) {
+                drawArc(
+                    color = cyan.copy(alpha = 0.90f),
+                    startAngle = -16f,
+                    sweepAngle = 82f,
+                    useCenter = false,
+                    topLeft = Offset(center.x - baseRadius, center.y - baseRadius),
+                    size = Size(baseRadius * 2f, baseRadius * 2f),
+                    style = Stroke(width = 5.5f, cap = StrokeCap.Round),
+                )
+                drawArc(
+                    color = purple.copy(alpha = 0.72f),
+                    startAngle = 154f,
+                    sweepAngle = 54f,
+                    useCenter = false,
+                    topLeft = Offset(center.x - baseRadius, center.y - baseRadius),
+                    size = Size(baseRadius * 2f, baseRadius * 2f),
+                    style = Stroke(width = 3.5f, cap = StrokeCap.Round),
+                )
+                repeat(4) { index ->
+                    val angle = Math.toRadians((index * 90.0) + 24.0)
+                    val particle = Offset(
+                        x = center.x + cos(angle).toFloat() * baseRadius,
+                        y = center.y + sin(angle).toFloat() * baseRadius,
+                    )
+                    drawCircle(
+                        color = if (index % 2 == 0) cyan else blue,
+                        radius = if (index == 0) 8.5f else 5.5f,
+                        center = particle,
+                        alpha = 0.65f + 0.30f * glowPulse,
+                    )
+                }
+            }
+
+            val outerRadius = baseRadius * 1.27f
+            rotate(counterRotation, pivot = center) {
+                drawArc(
+                    color = blue.copy(alpha = 0.46f),
+                    startAngle = 20f,
+                    sweepAngle = 128f,
+                    useCenter = false,
+                    topLeft = Offset(center.x - outerRadius, center.y - outerRadius),
+                    size = Size(outerRadius * 2f, outerRadius * 2f),
+                    style = Stroke(width = 2.6f, cap = StrokeCap.Round),
+                )
+                drawArc(
+                    color = purple.copy(alpha = 0.38f),
+                    startAngle = 210f,
+                    sweepAngle = 86f,
+                    useCenter = false,
+                    topLeft = Offset(center.x - outerRadius, center.y - outerRadius),
+                    size = Size(outerRadius * 2f, outerRadius * 2f),
+                    style = Stroke(width = 2.2f, cap = StrokeCap.Round),
                 )
             }
         }
@@ -277,9 +362,11 @@ fun StartupExperienceScreen(
                 modifier = Modifier
                     .size(176.dp)
                     .graphicsLayer {
-                        scaleX = pulse
-                        scaleY = pulse
-                        rotationZ = tilt
+                        val entry = entrance.value
+                        alpha = entry
+                        scaleX = (0.62f + 0.38f * entry) * breathe
+                        scaleY = (0.62f + 0.38f * entry) * breathe
+                        rotationZ = -12f * (1f - entry)
                     },
             )
             Text(

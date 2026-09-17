@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -27,6 +28,7 @@ import kotlinx.coroutines.runBlocking
 import com.google.common.util.concurrent.Futures
 import org.json.JSONArray
 
+@OptIn(UnstableApi::class)
 class PlaybackService : MediaLibraryService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val handler = Handler(Looper.getMainLooper())
@@ -114,13 +116,11 @@ class PlaybackService : MediaLibraryService() {
             if (::soundEngine.isInitialized) soundEngine.onPlayerVolumeChanged(volume)
         }
 
-        @UnstableApi
         override fun onAudioSessionIdChanged(audioSessionId: Int) {
             if (::soundEngine.isInitialized) soundEngine.onAudioSessionIdChanged(audioSessionId)
         }
     }
 
-    @UnstableApi
     override fun onCreate() {
         super.onCreate()
         AbLoopStateBus.publish(abLoopState)

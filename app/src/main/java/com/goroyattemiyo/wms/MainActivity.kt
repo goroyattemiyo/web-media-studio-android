@@ -295,7 +295,7 @@ private fun WmsRoot(
                             },
                             onStartupSoundChanged = { enabled ->
                                 startupSoundEnabled = enabled
-                                StartupExperiencePreferences.setStartupSoundEnabled(context, enabled)
+                                StartupExperiencePreferences.setSoundEnabled(context, enabled)
                             },
                             onChooseBackgroundImage = { backgroundImagePicker.launch(arrayOf("image/*")) },
                             onClearBackgroundImage = appearanceViewModel::clearBackgroundImage,
@@ -366,7 +366,7 @@ private fun WmsRoot(
                             onSelectPlaylist = playlistViewModel::selectPlaylist,
                             onCreate = playlistViewModel::create,
                             onRename = playlistViewModel::rename,
-                            onDeletePlaylist = playlistViewModel::deletePlaylist,
+                            onDeletePlaylist = playlistViewModel::delete,
                             onAddMedia = playlistViewModel::addMedia,
                             onRemoveMedia = playlistViewModel::removeMedia,
                             onMoveMedia = playlistViewModel::moveMedia,
@@ -433,7 +433,7 @@ private fun WmsRoot(
             playlists = playlists,
             selectedPlaylistId = importPlaylistId,
             onDismiss = { importOpen = false },
-            onPlaylistSelected = { importPlaylistId = it },
+            onPlaylistSelected = { importPlaylistId = importPlaylistId },
             onRightsChanged = acquisitionViewModel::setRightsConfirmed,
             onSave = { preset -> acquisitionViewModel.acquire(preset, importPlaylistId) },
             onCancel = acquisitionViewModel::cancelAcquisition,

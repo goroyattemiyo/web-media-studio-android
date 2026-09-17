@@ -24,7 +24,7 @@ internal object SoundPresetStore {
         val root = JSONObject(json)
         if (root.optInt("version") != SCHEMA_VERSION) return emptyList()
         val entries = root.optJSONArray("presets") ?: return emptyList()
-        buildList {
+        buildList<SoundPreset> {
             for (i in 0 until entries.length()) {
                 val item = entries.optJSONObject(i) ?: continue
                 val id = item.optString("id")
@@ -32,7 +32,7 @@ internal object SoundPresetStore {
                 if (!id.startsWith("user:") && id != "manual") continue
                 val pointArray = item.optJSONArray("points") ?: continue
                 if (pointArray.length() !in 1..64) continue
-                val points = buildList {
+                val points = buildList<SoundPoint> {
                     for (index in 0 until pointArray.length()) {
                         val point = pointArray.optJSONObject(index) ?: continue
                         val hz = point.optInt("hz")
@@ -40,7 +40,9 @@ internal object SoundPresetStore {
                         if (hz in 1..100_000 && mb in -12_000..12_000) add(SoundPoint(hz, mb))
                     }
                 }
-                if (points.isEmpty() || any { it.id == id || it.name.equals(name, true) }) continue
+                if (points.isEmpty() || this.any { existing: SoundPreset ->
+                        existing.id == id || existing.name.equals(name, ignoreCase = true)
+                    }) continue
                 add(SoundPreset(id, name, points))
             }
         }

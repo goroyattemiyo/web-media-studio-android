@@ -37,6 +37,7 @@ import com.goroyattemiyo.wms.appearance.WmsSkinCatalog
 import com.goroyattemiyo.wms.playback.VisualizerMode
 import com.goroyattemiyo.wms.ui.player.visualizer.VisualizerStaticPreview
 
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun AppearanceScreen(
     settings: AppearanceSettings,
@@ -72,35 +73,19 @@ fun AppearanceScreen(
 
         Text("Startup", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Card(modifier = Modifier.fillMaxWidth()) {
-            Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("起動アニメーション", fontWeight = FontWeight.Bold)
-                        Text(
-                            "WMSアイコンの起動演出を表示します。",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                    Switch(checked = startupAnimationEnabled, onCheckedChange = onStartupAnimationChanged)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("起動アニメーション", fontWeight = FontWeight.Bold)
+                    Text(
+                        "起動時にWMSロゴがふわっと浮かび上がります。",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                 }
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("起動サウンド", fontWeight = FontWeight.Bold)
-                        Text(
-                            "コールドスタート時にWMSソニックロゴを再生します。",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                    Switch(checked = startupSoundEnabled, onCheckedChange = onStartupSoundChanged)
-                }
+                Switch(checked = startupAnimationEnabled, onCheckedChange = onStartupAnimationChanged)
             }
         }
 

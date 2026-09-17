@@ -3,7 +3,7 @@
 Date: 2026-09-17 JST
 Branch: `feat/sound-controls-full-local`, Draft PR #10 based on Draft PR #9 (which depends on Draft playback fix PR #7).
 Design: `docs/AUDIO_CONTROLS_DESIGN.md` on `docs/audio-controls-design` (Draft PR #8).
-**No Android build, APK installation, car Bluetooth test, or real-device acceptance has been confirmed for this candidate.** Never advertise it as a verified volume-defect fix.
+**No successful Android build, APK installation, car Bluetooth test, or real-device acceptance has been confirmed for this candidate.** Never advertise it as a verified volume-defect fix.
 
 ## Implemented in source
 
@@ -15,6 +15,12 @@ Design: `docs/AUDIO_CONTROLS_DESIGN.md` on `docs/audio-controls-design` (Draft P
 - Android `Equalizer` on a valid current audio session, runtime physical band count/frequencies/gain range, vertically rotated faders and honest unsupported state; release on session change/destroy.
 - Eight logical built-in profiles, device-frequency interpolation/clamping; save/select/rename/delete for locally stored custom profiles; versioned JSON and input validation. Manual edits are not silently applied to saved profiles.
 - BOOST and platform EQ are mutually exclusive **by design** until downstream DSP ordering is proven. Turning one on while the other is active returns an error; users must turn the other OFF first.
+
+## Compilation incident and fix — 2026-09-17 JST
+
+- **FAIL observed and reported by user**: PowerShell `local-verify.ps1 -Install` stopped at `:app:compileDebugKotlin` with `SoundPresetStore.kt:43:50 Unresolved reference 'id'`.
+- Fix pushed in commit `6725f61fa7f5c17b137a41834002dfb82005d578`: explicitly typed the outer `buildList<SoundPreset>` and nested `buildList<SoundPoint>`, and made the duplicate check explicitly iterate `SoundPreset` items.
+- **Fix is not yet locally verified**. No unit-test/Lint/APK/install PASS is claimed; rerun compilation first, and perform full verification only after the compiler passes.
 
 ## Limitations and safety
 
@@ -36,12 +42,14 @@ if ($LASTEXITCODE -ne 0) { git switch --track origin/feat/sound-controls-full-lo
 if ($LASTEXITCODE -ne 0) { throw '切替失敗' }
 git pull --ff-only origin feat/sound-controls-full-local
 if ($LASTEXITCODE -ne 0) { throw '更新失敗' }
+& .\gradlew.bat :app:compileDebugKotlin --stacktrace
+if ($LASTEXITCODE -ne 0) { throw 'Kotlinコンパイル失敗。続行せずログを確認してください。' }
 New-Item -ItemType Directory -Force .\dist | Out-Null
 & .\scripts\local-verify.ps1 -Install *>&1 | Tee-Object -FilePath .\dist\sound-full-local-verify.log
 if ($LASTEXITCODE -ne 0) { throw 'ローカル検証失敗。ログを確認してください。' }
 ```
 
-Review `BUILD SUCCESSFUL`, `Local verification PASS`, `Install/update verification PASS` and reported APK hash. Do not state PASS until the script output is available; PowerShell pipeline status must also be checked against reported markers and the actual script exit code.
+Inspect `BUILD SUCCESSFUL`, `Local verification PASS`, `Install/update verification PASS` and APK hash in actual output. Do not state PASS until logs are available.
 
 ## Real-device acceptance checklist (not yet run)
 

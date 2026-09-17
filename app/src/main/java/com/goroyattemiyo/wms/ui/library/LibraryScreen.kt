@@ -2,6 +2,7 @@ package com.goroyattemiyo.wms.ui.library
 
 import android.content.ClipData
 import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 
 import androidx.compose.foundation.clickable
@@ -134,6 +135,7 @@ private fun AllMediaSection(
         }
         media.forEach { item ->
             val available = File(item.localPath).let { it.exists() && it.length() > 0L }
+            val originalWebUrl = item.originalUrl.takeIf(::isHttpUrl)
             val presentation = remember(item) { item.toMediaPresentation() }
             Card(modifier = Modifier.fillMaxWidth().clickable(enabled = available) { onPlay(item) }) {
                 Row(
@@ -175,6 +177,15 @@ private fun AllMediaSection(
                                 enabled = available,
                                 onClick = { actionMenuFor = null; shareMedia(context, item) },
                             )
+                            if (originalWebUrl != null) {
+                                DropdownMenuItem(
+                                    text = { Text("元動画を開く") },
+                                    onClick = {
+                                        actionMenuFor = null
+                                        openOriginalSource(context, originalWebUrl)
+                                    },
+                                )
+                            }
                             DropdownMenuItem(
                                 text = { Text("削除") },
                                 onClick = { actionMenuFor = null; pendingDelete = item },
@@ -211,3 +222,18 @@ private fun shareMedia(context: android.content.Context, media: MediaEntity) {
         Toast.makeText(context, it.message ?: "ファイルを共有できませんでした", Toast.LENGTH_SHORT).show()
     }
 }
+
+private fun openOriginalSource(context: android.content.Context, url: String) {
+    runCatching {
+        context.startActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse(url)).addCategory(Intent.CATEGORY_BROWSABLE),
+        )
+    }.onFailure {
+        Toast.makeText(context, "元動画を開けませんでした", Toast.LENGTH_SHORT).show()
+    }
+}
+
+private fun isHttpUrl(value: String): Boolean = runCatching {
+    val uri = Uri.parse(value)
+    uri.scheme.equals("http", ignoreCase = true) || uri.scheme.equals("https", ignoreCase = true)
+}.getOrDefault(false)

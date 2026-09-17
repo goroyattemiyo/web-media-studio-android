@@ -1,11 +1,6 @@
 package com.goroyattemiyo.wms.ui.startup
 
 import android.content.Context
-import android.media.AudioAttributes
-import android.media.AudioFocusRequest
-import android.media.AudioFormat
-import android.media.AudioManager
-import android.media.AudioTrack
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -45,11 +40,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.goroyattemiyo.wms.R
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.math.PI
 import kotlin.math.cos
-import kotlin.math.exp
 import kotlin.math.sin
-import kotlin.math.tanh
 
 object StartupExperienceSession {
     private val consumed = AtomicBoolean(false)
@@ -86,125 +78,9 @@ object StartupExperiencePreferences {
 }
 
 object StartupSonicLogo {
-    private const val SAMPLE_RATE = 48_000
-    private const val DURATION_SECONDS = 2.4
-    private const val DURATION_MS = 2_400L
-
     fun playIfAllowed(context: Context) {
-        val appContext = context.applicationContext
-        val audioManager = appContext.getSystemService(AudioManager::class.java) ?: return
-        if (audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) <= 0) return
-        if (audioManager.ringerMode == AudioManager.RINGER_MODE_SILENT) return
-
-        Thread(
-            {
-                runCatching { playPcm(audioManager) }
-            },
-            "wms-startup-sonic-logo",
-        ).apply {
-            isDaemon = true
-            start()
-        }
+        StartupSoundPlayer.play(context)
     }
-
-    private fun playPcm(audioManager: AudioManager) {
-        val attributes = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_MEDIA)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-            .build()
-        val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
-            .setAudioAttributes(attributes)
-            .setOnAudioFocusChangeListener { }
-            .build()
-        val focusGranted = audioManager.requestAudioFocus(focusRequest) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
-
-        val pcm = renderPcm()
-        val track = AudioTrack.Builder()
-            .setAudioAttributes(attributes)
-            .setAudioFormat(
-                AudioFormat.Builder()
-                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                    .setSampleRate(SAMPLE_RATE)
-                    .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
-                    .build(),
-            )
-            .setTransferMode(AudioTrack.MODE_STATIC)
-            .setBufferSizeInBytes(pcm.size * Short.SIZE_BYTES)
-            .build()
-
-        try {
-            if (track.state != AudioTrack.STATE_INITIALIZED) return
-            track.write(pcm, 0, pcm.size, AudioTrack.WRITE_BLOCKING)
-            track.setVolume(0.72f)
-            track.play()
-            Thread.sleep(DURATION_MS + 140L)
-        } finally {
-            runCatching { track.stop() }
-            track.release()
-            if (focusGranted) {
-                audioManager.abandonAudioFocusRequest(focusRequest)
-            }
-        }
-    }
-
-    private fun renderPcm(): ShortArray {
-        val frames = (SAMPLE_RATE * DURATION_SECONDS).toInt()
-        val output = ShortArray(frames * 2)
-        val twoPi = 2.0 * PI
-
-        repeat(frames) { frame ->
-            val t = frame.toDouble() / SAMPLE_RATE.toDouble()
-            val masterFade = smoothAttack(t, 0.018) * smoothRelease(t, DURATION_SECONDS, 0.36)
-
-            val lowEnvelope = smoothAttack(t, 0.025) * exp(-t * 1.18)
-            val low = (
-                sin(twoPi * 52.0 * t) +
-                    0.46 * sin(twoPi * 104.0 * t + 0.18)
-                ) * lowEnvelope
-
-            val bloomTime = (t - 0.24).coerceAtLeast(0.0)
-            val bloomEnvelope = if (t < 0.24) 0.0 else smoothAttack(bloomTime, 0.22) * exp(-bloomTime * 0.40)
-            val leftBloom = (
-                0.74 * sin(twoPi * 196.0 * t) +
-                    0.52 * sin(twoPi * 246.94 * t + 0.20) +
-                    0.34 * sin(twoPi * 293.66 * t + 0.46)
-                ) * bloomEnvelope
-            val rightBloom = (
-                0.74 * sin(twoPi * 196.0 * t + 0.10) +
-                    0.52 * sin(twoPi * 246.94 * t + 0.38) +
-                    0.34 * sin(twoPi * 293.66 * t + 0.66)
-                ) * bloomEnvelope
-
-            val shimmerTime = (t - 1.02).coerceAtLeast(0.0)
-            val shimmerEnvelope = if (t < 1.02) 0.0 else smoothAttack(shimmerTime, 0.035) * exp(-shimmerTime * 1.82)
-            val shimmerPhase = twoPi * (760.0 * shimmerTime + 185.0 * shimmerTime * shimmerTime)
-            val leftShimmer = (
-                sin(shimmerPhase) + 0.42 * sin(twoPi * 1_180.0 * shimmerTime + 0.28)
-                ) * shimmerEnvelope
-            val rightShimmer = (
-                sin(shimmerPhase + 0.24) + 0.42 * sin(twoPi * 1_180.0 * shimmerTime + 0.64)
-                ) * shimmerEnvelope
-
-            val left = masterFade * (0.72 * low + 0.42 * leftBloom + 0.24 * leftShimmer)
-            val right = masterFade * (0.72 * low + 0.42 * rightBloom + 0.24 * rightShimmer)
-
-            output[frame * 2] = toPcm16(left)
-            output[frame * 2 + 1] = toPcm16(right)
-        }
-        return output
-    }
-
-    private fun smoothAttack(t: Double, duration: Double): Double =
-        (t / duration).coerceIn(0.0, 1.0).let { it * it * (3.0 - 2.0 * it) }
-
-    private fun smoothRelease(t: Double, end: Double, duration: Double): Double =
-        ((end - t) / duration).coerceIn(0.0, 1.0).let { it * it * (3.0 - 2.0 * it) }
-
-    private fun toPcm16(value: Double): Short =
-        (tanh(value * 1.30) * Short.MAX_VALUE * 0.88)
-            .toInt()
-            .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
-            .toShort()
 }
 
 @Composable

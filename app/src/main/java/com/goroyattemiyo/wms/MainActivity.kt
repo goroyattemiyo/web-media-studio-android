@@ -433,7 +433,7 @@ private fun WmsRoot(
             playlists = playlists,
             selectedPlaylistId = importPlaylistId,
             onDismiss = { importOpen = false },
-            onPlaylistSelected = { importPlaylistId = importPlaylistId },
+            onPlaylistSelected = { importPlaylistId = it },
             onRightsChanged = acquisitionViewModel::setRightsConfirmed,
             onSave = { preset -> acquisitionViewModel.acquire(preset, importPlaylistId) },
             onCancel = acquisitionViewModel::cancelAcquisition,

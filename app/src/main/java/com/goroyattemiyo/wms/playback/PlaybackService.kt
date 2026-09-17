@@ -34,6 +34,10 @@ class PlaybackService : MediaLibraryService() {
     private var analysisCloser: AutoCloseable? = null
     private var librarySession: MediaLibrarySession? = null
     private var abLoopState = AbLoopState()
+        set(value) {
+            field = value
+            AbLoopStateBus.publish(value)
+        }
 
     private val preferences by lazy { getSharedPreferences(PREFS_NAME, MODE_PRIVATE) }
     private val applicationRepository by lazy { (application as WmsApplication).mediaRepository }
@@ -102,6 +106,7 @@ class PlaybackService : MediaLibraryService() {
     @UnstableApi
     override fun onCreate() {
         super.onCreate()
+        AbLoopStateBus.publish(abLoopState)
         val analysisRenderersFactory = AnalysisRenderersFactory(this)
         analysisCloser = analysisRenderersFactory
         player = ExoPlayer.Builder(this, analysisRenderersFactory).build().apply {

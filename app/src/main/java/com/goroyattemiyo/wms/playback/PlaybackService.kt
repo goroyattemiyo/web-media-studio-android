@@ -55,9 +55,26 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
+    private fun clearAbLoop() {
+        abLoopState = abLoopState.clear()
+        handler.removeCallbacks(abLoopTicker)
+    }
+
     private val playerListener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            // A-B points belong to the previous media item, never to the next track.
+            clearAbLoop()
             persistPlaybackState()
+        }
+
+        override fun onPositionDiscontinuity(
+            oldPosition: Player.PositionInfo,
+            newPosition: Player.PositionInfo,
+            reason: Int,
+        ) {
+            if (reason != Player.DISCONTINUITY_REASON_SEEK) return
+            val nextState = abLoopState.afterManualSeek(newPosition.positionMs)
+            if (nextState != abLoopState) clearAbLoop()
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -138,15 +155,22 @@ class PlaybackService : MediaLibraryService() {
                 ) = Futures.immediateFuture(
                     SessionResult(
                         when (customCommand.customAction) {
-                            PlaybackCommand.SET_AB_A -> { abLoopState = abLoopState.setA(player.currentPosition); SessionResult.RESULT_SUCCESS }
-                            PlaybackCommand.SET_AB_B -> { abLoopState = abLoopState.setB(player.currentPosition); SessionResult.RESULT_SUCCESS }
+                            PlaybackCommand.SET_AB_A -> {
+                                clearAbLoop()
+                                abLoopState = abLoopState.setA(player.currentPosition)
+                                SessionResult.RESULT_SUCCESS
+                            }
+                            PlaybackCommand.SET_AB_B -> {
+                                abLoopState = abLoopState.setB(player.currentPosition)
+                                SessionResult.RESULT_SUCCESS
+                            }
                             PlaybackCommand.TOGGLE_AB -> {
                                 abLoopState = abLoopState.toggle()
                                 handler.removeCallbacks(abLoopTicker)
                                 if (abLoopState.enabled) handler.post(abLoopTicker)
                                 SessionResult.RESULT_SUCCESS
                             }
-                            PlaybackCommand.CLEAR_AB -> { abLoopState = abLoopState.clear(); handler.removeCallbacks(abLoopTicker); SessionResult.RESULT_SUCCESS }
+                            PlaybackCommand.CLEAR_AB -> { clearAbLoop(); SessionResult.RESULT_SUCCESS }
                             else -> SessionResult.RESULT_ERROR_BAD_VALUE
                         },
                     ),
@@ -163,7 +187,7 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onDestroy() {
         handler.removeCallbacks(persistPosition)
-        handler.removeCallbacks(abLoopTicker)
+        clearAbLoop()
         persistPlaybackState()
         librarySession?.release()
         librarySession = null

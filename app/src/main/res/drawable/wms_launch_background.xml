@@ -5,9 +5,4 @@
             <solid android:color="#03050A" />
         </shape>
     </item>
-    <item
-        android:width="132dp"
-        android:height="132dp"
-        android:gravity="center"
-        android:drawable="@drawable/wms_emblem" />
 </layer-list>

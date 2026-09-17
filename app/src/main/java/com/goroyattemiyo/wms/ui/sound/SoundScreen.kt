@@ -117,7 +117,9 @@ fun SoundScreen(controller: MediaController?) {
                         onCheckedChange = { enabled ->
                             send(SoundCommand.BOOST, Bundle().apply { putBoolean(SoundCommand.ENABLED, enabled) })
                         },
-                        enabled = connected && (volume.boostEnabled || volume.boostAvailable && !eq.enabled),
+                        // Always allow an explicit request while connected. SoundEngine decides whether
+                        // boosting is safe and publishes the actual rejection reason instead of a dead switch.
+                        enabled = connected,
                     )
                 }
                 Text(
@@ -125,6 +127,15 @@ fun SoundScreen(controller: MediaController?) {
                         "100%＝原音量。ブーストは再生中に明示的にONにしてください。",
                     style = MaterialTheme.typography.bodySmall,
                 )
+                if (!volume.boostEnabled && connected) {
+                    val guidance = when {
+                        eq.enabled -> "BOOSTを使うには、下のイコライザーをOFFにしてください。"
+                        !volume.boostAvailable -> "BOOST準備待ち：端末内のMP3を再生してください。再生中も使えない場合はPCM出力・接続先の監視を確認します。"
+                        else -> "BOOSTをONにすると音量スライダーが200%まで広がります。まず125%から試してください。"
+                    }
+                    Text(guidance, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall)
+                }
                 TextButton(onClick = { send(SoundCommand.RESET) }, enabled = connected) {
                     Text("100%に戻す／ブースト解除")
                 }

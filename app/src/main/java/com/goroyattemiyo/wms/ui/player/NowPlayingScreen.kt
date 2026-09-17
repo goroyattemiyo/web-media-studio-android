@@ -35,6 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
@@ -43,6 +44,7 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionCommand
 import com.goroyattemiyo.wms.library.MediaEntity
 import com.goroyattemiyo.wms.playback.AbLoopState
+import com.goroyattemiyo.wms.playback.AbLoopStateBus
 import com.goroyattemiyo.wms.playback.PlaybackCommand
 import com.goroyattemiyo.wms.playback.PlaybackSpeed
 import com.goroyattemiyo.wms.playback.RepeatOption
@@ -79,7 +81,7 @@ fun NowPlayingScreen(
     var speed by remember { mutableFloatStateOf(1f) }
     var repeatMode by remember { mutableStateOf(RepeatOption.OFF) }
     var shuffleEnabled by remember { mutableStateOf(false) }
-    var abLoop by remember(activeMedia?.id) { mutableStateOf(AbLoopState()) }
+    val abLoop by AbLoopStateBus.state.collectAsStateWithLifecycle()
 
     DisposableEffect(controller) {
         if (controller == null) return@DisposableEffect onDispose {}
@@ -321,7 +323,6 @@ fun NowPlayingScreen(
                                 SessionCommand(PlaybackCommand.SET_AB_A, android.os.Bundle.EMPTY),
                                 android.os.Bundle.EMPTY,
                             )
-                            abLoop = abLoop.setA(controller?.currentPosition ?: 0L)
                         },
                         enabled = controller != null,
                     ) { Text("Aを設定") }
@@ -331,7 +332,6 @@ fun NowPlayingScreen(
                                 SessionCommand(PlaybackCommand.SET_AB_B, android.os.Bundle.EMPTY),
                                 android.os.Bundle.EMPTY,
                             )
-                            abLoop = abLoop.setB(controller?.currentPosition ?: 0L)
                         },
                         enabled = controller != null && abLoop.pointAMs != null,
                     ) { Text("Bを設定") }
@@ -341,7 +341,6 @@ fun NowPlayingScreen(
                                 SessionCommand(PlaybackCommand.TOGGLE_AB, android.os.Bundle.EMPTY),
                                 android.os.Bundle.EMPTY,
                             )
-                            abLoop = abLoop.toggle()
                         },
                         enabled = abLoop.isValid,
                     ) { Text(if (abLoop.enabled) "ループ ON" else "ループ開始") }
@@ -351,7 +350,6 @@ fun NowPlayingScreen(
                                 SessionCommand(PlaybackCommand.CLEAR_AB, android.os.Bundle.EMPTY),
                                 android.os.Bundle.EMPTY,
                             )
-                            abLoop = abLoop.clear()
                         },
                         enabled = abLoop.pointAMs != null,
                     ) { Text("クリア") }

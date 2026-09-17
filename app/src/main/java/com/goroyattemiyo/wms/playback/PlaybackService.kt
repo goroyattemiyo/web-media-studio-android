@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -26,12 +27,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import com.google.common.util.concurrent.Futures
 import org.json.JSONArray
-import kotlin.math.roundToInt
 
+@OptIn(UnstableApi::class)
 class PlaybackService : MediaLibraryService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var player: ExoPlayer
+    private lateinit var soundEngine: SoundEngine
     private var analysisCloser: AutoCloseable? = null
     private var librarySession: MediaLibrarySession? = null
     private var abLoopState = AbLoopState()
@@ -39,7 +41,6 @@ class PlaybackService : MediaLibraryService() {
             field = value
             AbLoopStateBus.publish(value)
         }
-    private var appVolumeState = AppVolumeState()
 
     private val preferences by lazy { getSharedPreferences(PREFS_NAME, MODE_PRIVATE) }
     private val applicationRepository by lazy { (application as WmsApplication).mediaRepository }
@@ -49,6 +50,13 @@ class PlaybackService : MediaLibraryService() {
         override fun run() {
             persistPlaybackState()
             handler.postDelayed(this, POSITION_PERSIST_INTERVAL_MS)
+        }
+    }
+
+    private val soundStatsTicker = object : Runnable {
+        override fun run() {
+            if (::soundEngine.isInitialized) soundEngine.reportLimiterActivity()
+            handler.postDelayed(this, 1_000L)
         }
     }
 
@@ -105,23 +113,20 @@ class PlaybackService : MediaLibraryService() {
         }
 
         override fun onVolumeChanged(volume: Float) {
-            // Publish from the player callback so every UI reads the actual accepted player value.
-            appVolumeState = appVolumeState.withPercent((volume * 100f).roundToInt())
-            AppVolumeBus.publish(appVolumeState)
-            preferences.edit()
-                .putInt(KEY_WMS_VOLUME, appVolumeState.percent)
-                .putInt(KEY_WMS_LAST_AUDIBLE, appVolumeState.lastAudiblePercent)
-                .apply()
+            if (::soundEngine.isInitialized) soundEngine.onPlayerVolumeChanged(volume)
+        }
+
+        override fun onAudioSessionIdChanged(audioSessionId: Int) {
+            if (::soundEngine.isInitialized) soundEngine.onAudioSessionIdChanged(audioSessionId)
         }
     }
 
-    @UnstableApi
     override fun onCreate() {
         super.onCreate()
         AbLoopStateBus.publish(abLoopState)
-        val analysisRenderersFactory = AnalysisRenderersFactory(this)
-        analysisCloser = analysisRenderersFactory
-        player = ExoPlayer.Builder(this, analysisRenderersFactory).build().apply {
+        val renderersFactory = SoundRenderersFactory(this)
+        analysisCloser = renderersFactory
+        player = ExoPlayer.Builder(this, renderersFactory).build().apply {
             setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -132,9 +137,11 @@ class PlaybackService : MediaLibraryService() {
             setHandleAudioBecomingNoisy(true)
             addListener(playerListener)
         }
+        soundEngine = SoundEngine(this, player, renderersFactory.boostProcessor, handler, preferences)
 
         restorePlayerOptions()
         restorePlaybackState()
+        soundEngine.onAudioSessionIdChanged(player.audioSessionId)
 
         val sessionActivity = PendingIntent.getActivity(
             this,
@@ -152,15 +159,15 @@ class PlaybackService : MediaLibraryService() {
                     session: MediaSession,
                     controller: MediaSession.ControllerInfo,
                 ): MediaSession.ConnectionResult {
-                    val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS
+                    val builder = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS
                         .buildUpon()
                         .add(SessionCommand(PlaybackCommand.SET_AB_A, Bundle.EMPTY))
                         .add(SessionCommand(PlaybackCommand.SET_AB_B, Bundle.EMPTY))
                         .add(SessionCommand(PlaybackCommand.TOGGLE_AB, Bundle.EMPTY))
                         .add(SessionCommand(PlaybackCommand.CLEAR_AB, Bundle.EMPTY))
-                        .build()
+                    SoundCommand.actions.forEach { builder.add(SessionCommand(it, Bundle.EMPTY)) }
                     return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
-                        .setAvailableSessionCommands(commands)
+                        .setAvailableSessionCommands(builder.build())
                         .build()
                 }
 
@@ -188,6 +195,7 @@ class PlaybackService : MediaLibraryService() {
                                 SessionResult.RESULT_SUCCESS
                             }
                             PlaybackCommand.CLEAR_AB -> { clearAbLoop(); SessionResult.RESULT_SUCCESS }
+                            in SoundCommand.actions -> soundEngine.execute(customCommand.customAction, args)
                             else -> SessionResult.RESULT_ERROR_BAD_VALUE
                         },
                     ),
@@ -197,6 +205,7 @@ class PlaybackService : MediaLibraryService() {
             .build()
 
         handler.postDelayed(persistPosition, POSITION_PERSIST_INTERVAL_MS)
+        handler.postDelayed(soundStatsTicker, 1_000L)
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? =
@@ -204,11 +213,13 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onDestroy() {
         handler.removeCallbacks(persistPosition)
+        handler.removeCallbacks(soundStatsTicker)
         clearAbLoop()
         persistPlaybackState()
         librarySession?.release()
         librarySession = null
         player.removeListener(playerListener)
+        if (::soundEngine.isInitialized) soundEngine.close()
         player.release()
         analysisCloser?.close()
         analysisCloser = null
@@ -237,11 +248,6 @@ class PlaybackService : MediaLibraryService() {
         player.playbackParameters = PlaybackParameters(PlaybackSpeed.normalize(preferences.getFloat(KEY_SPEED, 1f)))
         player.repeatMode = RepeatOption.fromMedia3(preferences.getInt(KEY_REPEAT_MODE, Player.REPEAT_MODE_OFF)).media3Mode
         player.shuffleModeEnabled = preferences.getBoolean(KEY_SHUFFLE, false)
-        val savedVolume = preferences.getInt(KEY_WMS_VOLUME, 100).coerceIn(0, 100)
-        val lastAudible = preferences.getInt(KEY_WMS_LAST_AUDIBLE, 100).coerceIn(1, 100)
-        appVolumeState = AppVolumeState(savedVolume, lastAudible).withPercent(savedVolume)
-        AppVolumeBus.publish(appVolumeState)
-        player.volume = appVolumeState.percent / 100f
     }
 
     private fun persistPlayerOptions() {
@@ -293,8 +299,6 @@ class PlaybackService : MediaLibraryService() {
         const val KEY_SPEED = "speed"
         const val KEY_REPEAT_MODE = "repeat_mode"
         const val KEY_SHUFFLE = "shuffle"
-        const val KEY_WMS_VOLUME = "wms_volume_percent"
-        const val KEY_WMS_LAST_AUDIBLE = "wms_last_audible_percent"
         const val POSITION_PERSIST_INTERVAL_MS = 5_000L
         const val AB_LOOP_INTERVAL_MS = 200L
     }

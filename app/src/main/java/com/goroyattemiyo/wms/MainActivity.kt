@@ -43,6 +43,7 @@ import com.goroyattemiyo.wms.ui.playback.PlaybackRequest
 import com.goroyattemiyo.wms.ui.playback.SavedMiniPlayer
 import com.goroyattemiyo.wms.ui.playback.rememberPlaybackController
 import com.goroyattemiyo.wms.ui.player.NowPlayingScreen
+import com.goroyattemiyo.wms.ui.sound.SoundScreen
 import com.goroyattemiyo.wms.ui.startup.StartupExperiencePreferences
 import com.goroyattemiyo.wms.ui.startup.StartupExperienceScreen
 import com.goroyattemiyo.wms.ui.startup.StartupExperienceSession
@@ -178,7 +179,7 @@ private fun WmsRoot(
                 }
                 selectedTab = AppTab.PLAYER
             }
-            AppTab.HOME, AppTab.LIBRARY -> {
+            AppTab.HOME, AppTab.LIBRARY, AppTab.SOUND -> {
                 lastContentTab = tab
                 selectedTab = tab
             }
@@ -390,6 +391,7 @@ private fun WmsRoot(
                             onVisualizerSelected = appearanceViewModel::selectVisualizer,
                             controller = playbackController,
                         )
+                        AppTab.SOUND -> SoundScreen(controller = playbackController)
                     }
                 }
 

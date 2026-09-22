@@ -28,6 +28,7 @@ internal class SafeBoostProcessor : BaseAudioProcessor() {
     @Volatile var onPcmSupportChanged: ((Boolean) -> Unit)? = null
     @Volatile private var targetGain = 1f
     @Volatile private var forceUnity = false
+    @Volatile private var measurementResetRequested = false
     private var currentGain = 1f
     private var limiterReduction = 1f
     private var sampleRate = 48000
@@ -39,7 +40,9 @@ internal class SafeBoostProcessor : BaseAudioProcessor() {
         val accepted = gain.coerceIn(1f, 2f)
         if (targetGain != accepted) {
             targetGain = accepted
-            resetMeasurement()
+            // The setter runs on the service thread; audio-side counters belong to queueInput.
+            measuredBoostDb = Float.NaN
+            measurementResetRequested = true
         }
         if (accepted <= 1f) forceUnity = true
     }
@@ -65,6 +68,7 @@ internal class SafeBoostProcessor : BaseAudioProcessor() {
         limiterReduction = 1f
         targetGain = 1f
         forceUnity = false
+        measurementResetRequested = false
         resetMeasurement()
     }
 
@@ -76,6 +80,10 @@ internal class SafeBoostProcessor : BaseAudioProcessor() {
     }
 
     override fun queueInput(inputBuffer: ByteBuffer) {
+        if (measurementResetRequested) {
+            resetMeasurement()
+            measurementResetRequested = false
+        }
         val remaining = inputBuffer.remaining()
         if (remaining == 0) return
         val output = replaceOutputBuffer(remaining).order(ByteOrder.nativeOrder())

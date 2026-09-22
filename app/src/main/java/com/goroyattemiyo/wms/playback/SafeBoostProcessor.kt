@@ -7,13 +7,15 @@ import androidx.media3.common.util.UnstableApi
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.abs
+import kotlin.math.log10
 import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
- * WMS-only optional PCM gain followed by a linked peak limiter. Does not promise true-peak,
- * downstream codec or speaker protection. No allocations per frame, no timeline changes.
- * Unity path copies PCM verbatim. AudioEffect EQ must be OFF whenever gain exceeds unity.
+ * Optional WMS PCM gain followed by a linked sample-peak limiter. Neither true-peak nor
+ * downstream codec, Android volume, amplifier or speaker clipping protection is guaranteed.
+ * No per-frame allocations or timeline changes; the unity path is byte-for-byte unchanged.
+ * Android AudioEffect EQ must remain OFF while boost is active.
  */
 @UnstableApi
 internal class SafeBoostProcessor : BaseAudioProcessor() {
@@ -21,16 +23,25 @@ internal class SafeBoostProcessor : BaseAudioProcessor() {
         private set
     @Volatile var limitedFrames: Long = 0
         private set
+    @Volatile var measuredBoostDb: Float = Float.NaN
+        private set
     @Volatile var onPcmSupportChanged: ((Boolean) -> Unit)? = null
     @Volatile private var targetGain = 1f
     @Volatile private var forceUnity = false
     private var currentGain = 1f
     private var limiterReduction = 1f
     private var sampleRate = 48000
+    private var measurementFrames = 0
+    private var inputEnergy = 0.0
+    private var outputEnergy = 0.0
 
     fun setBoostGain(gain: Float) {
-        targetGain = gain.coerceIn(1f, 2f)
-        if (gain <= 1f) forceUnity = true
+        val accepted = gain.coerceIn(1f, 2f)
+        if (targetGain != accepted) {
+            targetGain = accepted
+            resetMeasurement()
+        }
+        if (accepted <= 1f) forceUnity = true
     }
 
     override fun onConfigure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
@@ -45,6 +56,7 @@ internal class SafeBoostProcessor : BaseAudioProcessor() {
     override fun onFlush(streamMetadata: AudioProcessor.StreamMetadata) {
         currentGain = 1f
         limiterReduction = 1f
+        resetMeasurement()
     }
 
     override fun onReset() {
@@ -53,6 +65,14 @@ internal class SafeBoostProcessor : BaseAudioProcessor() {
         limiterReduction = 1f
         targetGain = 1f
         forceUnity = false
+        resetMeasurement()
+    }
+
+    private fun resetMeasurement() {
+        measurementFrames = 0
+        inputEnergy = 0.0
+        outputEnergy = 0.0
+        measuredBoostDb = Float.NaN
     }
 
     override fun queueInput(inputBuffer: ByteBuffer) {
@@ -66,6 +86,7 @@ internal class SafeBoostProcessor : BaseAudioProcessor() {
             forceUnity = false
         }
         if (targetGain <= 1f && currentGain <= 1f && limiterReduction >= 1f) {
+            measuredBoostDb = Float.NaN
             output.put(inputBuffer)
             output.flip()
             return
@@ -97,14 +118,26 @@ internal class SafeBoostProcessor : BaseAudioProcessor() {
                 val value = (finite * appliedGain).coerceIn(-OUTPUT_CEILING, OUTPUT_CEILING)
                 if (floatPcm) output.putFloat(value) else
                     output.putShort((value * 32768f).roundToInt().coerceIn(-32768, 32767).toShort())
+                inputEnergy += finite.toDouble() * finite.toDouble()
+                outputEnergy += value.toDouble() * value.toDouble()
             }
             inputBuffer.position(frameStart + frameBytes)
+            measurementFrames++
+            if (measurementFrames >= (sampleRate / 4).coerceAtLeast(1)) {
+                val count = measurementFrames * channelCount
+                measuredBoostDb = if (inputEnergy > count * 1e-8 && outputEnergy > 0.0) {
+                    (10.0 * log10(outputEnergy / inputEnergy)).toFloat()
+                } else Float.NaN
+                measurementFrames = 0
+                inputEnergy = 0.0
+                outputEnergy = 0.0
+            }
         }
         if (inputBuffer.hasRemaining()) output.put(inputBuffer)
         output.flip()
     }
 
     private companion object {
-        const val OUTPUT_CEILING = 0.8912509f // -1 dBFS sample-peak ceiling, not true-peak protection.
+        const val OUTPUT_CEILING = 0.8912509f // -1 dBFS sample-peak, not true-peak protection.
     }
 }

@@ -2,6 +2,7 @@ package com.goroyattemiyo.wms.playback
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -11,6 +12,8 @@ class AppVolumeStateTest {
         assertEquals(100, initial.percent)
         assertEquals(100, initial.maximum)
         assertFalse(initial.boostEnabled)
+        assertEquals(0, initial.boostDbTenths)
+        assertNull(initial.actualBoostDb)
         assertEquals(0, initial.withPercent(initial.muteToggleTarget()).percent)
     }
 
@@ -21,30 +24,38 @@ class AppVolumeStateTest {
         assertEquals(35, muted.muteToggleTarget())
     }
 
-    @Test fun boostsOnlyWhenAvailableAndExplicitlyArmed() {
-        val unavailable = AppVolumeState().withBoost(true).withPercent(200)
+    @Test fun boostOnlyWhenAvailableAndExplicitlyArmed() {
+        val unavailable = AppVolumeState().withBoost(true)
         assertFalse(unavailable.boostEnabled)
-        assertEquals(100, unavailable.percent)
-        val enabled = AppVolumeState(boostAvailable = true).withBoost(true).withPercent(175)
+        assertEquals(0, unavailable.boostDbTenths)
+        val enabled = AppVolumeState(percent = 45, boostAvailable = true).withBoost(true)
         assertTrue(enabled.boostEnabled)
-        assertEquals(200, enabled.maximum)
-        assertEquals(175, enabled.percent)
-        assertEquals(175, enabled.withPercent(0).muteToggleTarget())
+        assertEquals(45, enabled.percent) // Enabling boost never jumps the normal volume slider.
+        assertEquals(30, enabled.boostDbTenths)
+        assertEquals(3f, enabled.requestedBoostDb, 0.0001f)
+        assertEquals(100, enabled.maximum)
     }
 
-    @Test fun disarmingAndRouteChangeClampRequestedAndRememberedGain() {
-        val boosted = AppVolumeState(boostAvailable = true).withBoost(true).withPercent(190)
+    @Test fun gainBoundariesAndRouteDisarm() {
+        val boosted = AppVolumeState(boostAvailable = true).withBoost(true)
+            .withBoostDbTenths(999)
+        assertEquals(60, boosted.boostDbTenths)
+        assertEquals(6f, boosted.requestedBoostDb, 0.0001f)
         val safe = boosted.withBoost(false)
         assertFalse(safe.boostEnabled)
         assertEquals(100, safe.percent)
-        assertEquals(100, safe.lastAudiblePercent)
-        assertEquals(100, safe.withPercent(0).muteToggleTarget())
+        assertEquals(0, safe.boostDbTenths)
+        assertNull(safe.actualBoostDb)
+        assertEquals(0f, safe.requestedBoostDb, 0.0001f)
     }
 
-    @Test fun boundsAndSilentInvalidRestoreAreSafe() {
+    @Test fun boundsMuteAndGainCannotArmByItself() {
         assertEquals(100, AppVolumeState().withPercent(999).percent)
         assertEquals(0, AppVolumeState().withPercent(-8).percent)
         assertEquals(1, AppVolumeState(0, 0).muteToggleTarget())
-        assertEquals(200, AppVolumeState(boostAvailable = true).withBoost(true).withPercent(999).percent)
+        assertEquals(0, AppVolumeState(boostAvailable = true).withBoostDbTenths(60).boostDbTenths)
+        val boosted = AppVolumeState(boostAvailable = true).withBoost(true).withBoostDbTenths(-4)
+        assertEquals(0, boosted.boostDbTenths)
+        assertTrue(boosted.boostEnabled)
     }
 }

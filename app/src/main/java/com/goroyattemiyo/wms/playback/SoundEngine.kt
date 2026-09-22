@@ -14,6 +14,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.SessionResult
 import java.util.UUID
 import kotlin.math.abs
+import kotlin.math.pow
 import kotlin.math.roundToInt
 
 /** Owns WMS sound. Renderer notifications are always routed onto the service main handler. */
@@ -77,19 +78,19 @@ internal class SoundEngine(
 
     private fun persistVolume() {
         preferences.edit()
-            .putInt(KEY_VOLUME, volume.percent.coerceAtMost(100))
-            .putInt(KEY_LAST_AUDIBLE, volume.lastAudiblePercent.coerceAtMost(100))
+            .putInt(KEY_VOLUME, volume.percent)
+            .putInt(KEY_LAST_AUDIBLE, volume.lastAudiblePercent)
             .putBoolean(KEY_BOOST, false)
             .apply()
     }
 
     private fun applyVolume() {
-        val requested = volume.percent
-        processor.setBoostGain(
-            if (requested > 100 && volume.boostEnabled && volume.boostAvailable && !eq.enabled)
-                requested / 100f else 1f,
-        )
-        val expected = requested.coerceAtMost(100) / 100f
+        // User-selected dB describes a digital amplitude multiplier, not phone/Bluetooth volume.
+        val requestedDb = if (volume.boostEnabled && volume.boostAvailable && !eq.enabled)
+            volume.requestedBoostDb.toDouble() else 0.0
+        val gain = 10.0.pow(requestedDb / 20.0).toFloat()
+        processor.setBoostGain(gain)
+        val expected = volume.percent / 100f
         if (abs(player.volume - expected) > 0.0001f) player.volume = expected
         persistVolume()
         publish()
@@ -97,17 +98,21 @@ internal class SoundEngine(
 
     fun onPlayerVolumeChanged(value: Float) {
         if (closed) return
-        val expected = volume.percent.coerceAtMost(100) / 100f
+        val expected = volume.percent / 100f
         if (abs(expected - value) < 0.005f) return
         volume = volume.withBoost(false).withPercent((value * 100f).roundToInt())
-            .copy(message = "外部の音量操作に合わせました。")
+            .copy(message = "外部の音量操作に合わせました。BOOSTは解除しました。")
         applyVolume()
     }
 
     private fun onPcmSupportChanged(supported: Boolean) {
         volume = volume.copy(boostAvailable = supported && routeMonitoring)
         if (!volume.boostAvailable && volume.boostEnabled) {
-            volume = volume.withBoost(false).copy(message = "この出力ではBOOSTを利用できません。100%以下に戻しました。")
+            volume = volume.withBoost(false).copy(message = "この出力ではBOOSTを利用できません。増幅を解除しました。")
+            applyVolume()
+        } else if (volume.boostEnabled && volume.boostAvailable) {
+            // BaseAudioProcessor.onReset() resets targetGain to unity on renderer reinitialization.
+            // Reapply the explicit user setting after every supported PCM reconfiguration.
             applyVolume()
         } else publish()
     }
@@ -119,8 +124,11 @@ internal class SoundEngine(
     }
 
     fun reportLimiterActivity() {
-        if (closed || volume.limitedFrames == processor.limitedFrames) return
-        volume = volume.copy(limitedFrames = processor.limitedFrames)
+        if (closed) return
+        val measured = if (volume.boostEnabled && volume.boostAvailable && volume.boostDbTenths > 0)
+            processor.measuredBoostDb.takeIf { it.isFinite() } else null
+        if (volume.limitedFrames == processor.limitedFrames && volume.actualBoostDb == measured) return
+        volume = volume.copy(limitedFrames = processor.limitedFrames, actualBoostDb = measured)
         AppVolumeBus.publish(volume)
     }
 
@@ -247,7 +255,7 @@ internal class SoundEngine(
         val revised = eq.customPresets.map { if (it.id == old.id) it.copy(name = name) else it }
         if (!preferences.edit().putString(KEY_CUSTOM, SoundPresetStore.encode(revised)).commit())
             return status("名前の変更を保存できませんでした。")
-        eq = eq.copy(customPresets = revised, message = "名前を変更しました。")
+        eq = eq.copy(customPresets = revised, message = "指定 +${volume.requestedBoostDb} dB")
         publish()
         return SessionResult.RESULT_SUCCESS
     }
@@ -268,7 +276,7 @@ internal class SoundEngine(
     fun execute(action: String, args: Bundle): Int = when (action) {
         SoundCommand.VOLUME -> {
             val requested = args.getInt(SoundCommand.PERCENT, -1)
-            if (requested !in 0..volume.maximum) status("BOOSTをONにしてから100%を超える音量を指定してください。")
+            if (requested !in 0..100) status("アプリ音量は0〜100%で指定してください。")
             else { volume = volume.withPercent(requested).copy(message = ""); applyVolume(); SessionResult.RESULT_SUCCESS }
         }
         SoundCommand.BOOST -> {
@@ -277,7 +285,20 @@ internal class SoundEngine(
                 enabled && !volume.boostAvailable -> status("PCM出力や出力先の監視を確認できないためBOOSTを使えません。")
                 enabled && eq.enabled -> status("BOOSTを使う前にEQをOFFにしてください。")
                 else -> {
-                    volume = volume.withBoost(enabled).copy(message = if (enabled) "BOOST ON。小さい音量から試してください。" else "BOOST OFF")
+                    volume = volume.withBoost(enabled).copy(message = if (enabled)
+                        "BOOST +${AppVolumeState.DEFAULT_BOOST_DB_TENTHS / 10f} dBを指定。小さい音量から試してください。" else "BOOST OFF")
+                    applyVolume()
+                    SessionResult.RESULT_SUCCESS
+                }
+            }
+        }
+        SoundCommand.BOOST_DB -> {
+            val dbTenths = args.getInt(SoundCommand.BOOST_DB_TENTHS, -1)
+            when {
+                !volume.boostEnabled || !volume.boostAvailable || eq.enabled -> status("BOOSTをONにしてからdBを調整してください。")
+                dbTenths !in 0..AppVolumeState.MAX_BOOST_DB_TENTHS -> status("BOOSTは0〜+6.0 dBの範囲です。")
+                else -> {
+                    volume = volume.withBoostDbTenths(dbTenths).copy(message = "指定 +${dbTenths / 10f} dB。実際の増幅量はPCM実測値を確認してください。")
                     applyVolume()
                     SessionResult.RESULT_SUCCESS
                 }

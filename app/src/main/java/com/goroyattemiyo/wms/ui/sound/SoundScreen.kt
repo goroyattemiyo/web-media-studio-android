@@ -81,7 +81,7 @@ fun SoundScreen(controller: MediaController?) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically) {
-                    Text("アプリ音量", style = MaterialTheme.typography.titleMedium)
+                    Text("アプリ音量（0〜100%）", style = MaterialTheme.typography.titleMedium)
                     Text("$shownVolume%", style = MaterialTheme.typography.titleLarge)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -94,10 +94,10 @@ fun SoundScreen(controller: MediaController?) {
                         enabled = connected,
                     ) { Text(if (volume.percent == 0) "解除" else "消音") }
                     Slider(
-                        value = shownVolume.toFloat().coerceIn(0f, volume.maximum.toFloat()),
-                        valueRange = 0f..volume.maximum.toFloat(),
+                        value = shownVolume.toFloat().coerceIn(0f, 100f),
+                        valueRange = 0f..100f,
                         onValueChange = { value ->
-                            val percent = value.roundToInt().coerceIn(0, volume.maximum)
+                            val percent = value.roundToInt().coerceIn(0, 100)
                             if (percent != shownVolume) {
                                 shownVolume = percent
                                 send(SoundCommand.VOLUME, Bundle().apply {
@@ -111,27 +111,59 @@ fun SoundScreen(controller: MediaController?) {
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically) {
-                    Text("音量ブースト", style = MaterialTheme.typography.bodyLarge)
+                    Text("音量ブースト（PCM）", style = MaterialTheme.typography.bodyLarge)
                     Switch(
                         checked = volume.boostEnabled,
                         onCheckedChange = { enabled ->
                             send(SoundCommand.BOOST, Bundle().apply { putBoolean(SoundCommand.ENABLED, enabled) })
                         },
-                        // Always allow an explicit request while connected. SoundEngine decides whether
-                        // boosting is safe and publishes the actual rejection reason instead of a dead switch.
+                        // Keep rejection reasons visible; the service enforces PCM/route/EQ safety.
                         enabled = connected,
                     )
                 }
                 Text(
-                    if (volume.boostEnabled) "BOOST ON：100%超はPCM増幅＋リミッター（最大200%は試験上限）。" else
-                        "100%＝原音量。ブーストは再生中に明示的にONにしてください。",
+                    if (volume.boostEnabled) "BOOST ON：指定したdBをPCMに適用します。リミッター作動中は実際の増幅量が小さくなります。" else
+                        "BOOST OFF：原音量100%。再生中にONにすると+3.0 dBから開始します。",
                     style = MaterialTheme.typography.bodySmall,
                 )
-                if (!volume.boostEnabled && connected) {
+                if (volume.boostEnabled) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Text("PCM増幅量", style = MaterialTheme.typography.bodyLarge)
+                        Text("+${volume.requestedBoostDb} dB", style = MaterialTheme.typography.titleLarge)
+                    }
+                    Slider(
+                        value = volume.requestedBoostDb.coerceIn(0f, 6f),
+                        valueRange = 0f..6f,
+                        steps = 11, // 0.5 dB increments; +6 dB is experimental.
+                        onValueChange = { value ->
+                            val tenthDb = ((value * 2f).roundToInt() * 5).coerceIn(0, 60)
+                            if (tenthDb != volume.boostDbTenths) {
+                                send(SoundCommand.BOOST_DB, Bundle().apply {
+                                    putInt(SoundCommand.BOOST_DB_TENTHS, tenthDb)
+                                })
+                            }
+                        },
+                        enabled = connected && volume.boostAvailable && !eq.enabled,
+                    )
+                    val measured = volume.actualBoostDb
+                    if (measured != null) {
+                        val rounded = (measured * 10).roundToInt() / 10f
+                        Text("PCM実測：${if (rounded > 0f) "+" else ""}$rounded dB（増幅前後のRMS比）",
+                            style = MaterialTheme.typography.bodySmall)
+                        if (rounded < volume.requestedBoostDb - 1f) {
+                            Text("リミッターが増幅を抑えています。音源によっては指定dBまで上がりません。",
+                                style = MaterialTheme.typography.bodySmall)
+                        }
+                    } else {
+                        Text("PCM実測：測定待ち。再生中の対応音声で確認してください。",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                } else if (connected) {
                     val guidance = when {
                         eq.enabled -> "BOOSTを使うには、下のイコライザーをOFFにしてください。"
                         !volume.boostAvailable -> "BOOST準備待ち：端末内のMP3を再生してください。再生中も使えない場合はPCM出力・接続先の監視を確認します。"
-                        else -> "BOOSTをONにすると音量スライダーが200%まで広がります。まず125%から試してください。"
+                        else -> "BOOSTをONにすると+3.0 dBから始まり、0〜+6.0 dBで調整できます。小さい音量から試してください。"
                     }
                     Text(guidance, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall)
@@ -254,7 +286,7 @@ fun SoundScreen(controller: MediaController?) {
                 }
             }
         }
-        Text("Bluetooth／車載機の上限は変更しません。大音量による歪みや聴覚への影響に注意してください。",
+        Text("PCM実測値はWMS内部の信号比です。Bluetooth／車載機の上限は変更しません。大音量と歪みに注意してください。",
             style = MaterialTheme.typography.bodySmall)
     }
 

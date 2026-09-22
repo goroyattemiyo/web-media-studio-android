@@ -14,7 +14,6 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.SessionResult
 import java.util.UUID
 import kotlin.math.abs
-import kotlin.math.pow
 import kotlin.math.roundToInt
 
 /** Owns WMS sound. Renderer notifications are always routed onto the service main handler. */
@@ -85,10 +84,9 @@ internal class SoundEngine(
     }
 
     private fun applyVolume() {
-        // User-selected dB describes a digital amplitude multiplier, not phone/Bluetooth volume.
-        val requestedDb = if (volume.boostEnabled && volume.boostAvailable && !eq.enabled)
-            volume.requestedBoostDb.toDouble() else 0.0
-        val gain = 10.0.pow(requestedDb / 20.0).toFloat()
+        // The requested dB gain is separate from Android, Bluetooth and Media3 Player.volume.
+        val gain = if (volume.boostEnabled && volume.boostAvailable && !eq.enabled)
+            BoostGain.amplitudeForTenths(volume.boostDbTenths) else 1f
         processor.setBoostGain(gain)
         val expected = volume.percent / 100f
         if (abs(player.volume - expected) > 0.0001f) player.volume = expected
@@ -255,7 +253,7 @@ internal class SoundEngine(
         val revised = eq.customPresets.map { if (it.id == old.id) it.copy(name = name) else it }
         if (!preferences.edit().putString(KEY_CUSTOM, SoundPresetStore.encode(revised)).commit())
             return status("名前の変更を保存できませんでした。")
-        eq = eq.copy(customPresets = revised, message = "指定 +${volume.requestedBoostDb} dB")
+        eq = eq.copy(customPresets = revised, message = "名前を変更しました。")
         publish()
         return SessionResult.RESULT_SUCCESS
     }

@@ -42,7 +42,8 @@ class SafeBoostProcessorTest {
         processor.queueInput(input)
         val output = processor.output.order(ByteOrder.nativeOrder())
         output.position((frames - 1) * 4)
-        assertEquals(7063, output.short.toInt(), 4) // +3 dB after gain ramp.
+        val sample = output.short.toInt()
+        assertTrue("sample=$sample", abs(sample - 7063) <= 4) // +3 dB after gain ramp.
         assertTrue("measured=${processor.measuredBoostDb}", processor.measuredBoostDb.isFinite())
         assertEquals(3f, processor.measuredBoostDb, 0.15f)
         assertEquals(0L, processor.limitedFrames)
